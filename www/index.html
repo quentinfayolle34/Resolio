@@ -953,18 +953,18 @@ const TIERS = [
   { n: 'Platine', c: '#8fd3d6', e: '💠' }, { n: 'Diamant', c: '#b8a6ff', e: '💎' },
 ];
 const BADGES = [
-  { e: '📚', n: 'Bibliophile', cat: 'Lecture', u: 'livres terminés', steps: [2, 8, 15, 35, 75], v: s => s.finished },
-  { e: '📖', n: 'Dévoreur', cat: 'Lecture', u: 'pages lues', steps: [1000, 3000, 7500, 15000, 30000], v: s => s.pages },
-  { e: '💪', n: 'Assidu', cat: 'Sport', u: 'séances de sport', steps: [15, 75, 150, 350, 750], v: s => s.sessions },
-  { e: '🏃', n: 'Explorateur', cat: 'Sport', u: 'km parcourus', steps: [50, 150, 750, 1500, 3500], v: s => s.km },
-  { e: '⏱️', n: 'Endurant', cat: 'Sport', u: 'heures de sport', steps: [15, 75, 150, 350, 750], v: s => s.minutes / 60 },
-  { e: '🧘', n: 'Zen', cat: 'Méditation', u: 'heures de méditation', steps: [2, 10, 30, 75, 150], v: s => s.medMinutes / 60 },
-  { e: '🚭', n: 'Maîtrise', cat: 'Réduire', u: 'périodes sous la limite', steps: [7, 21, 50, 150, 500], v: s => s.reduceOk },
-  { e: '⌛', n: 'Plongé', cat: 'Lecture', u: 'heures de lecture', steps: [5, 25, 75, 150, 300], v: s => s.readMinutes / 60 },
-  { e: '🔥', n: 'Inarrêtable', cat: 'Toutes', u: 'périodes validées d\'affilée (record)', steps: [5, 10, 21, 45, 90], v: s => s.bestAny },
-  { e: '🏆', n: 'Champion', cat: 'Toutes', u: 'périodes validées', steps: [10, 40, 80, 150, 365], v: s => s.periodsOk },
-  { e: '🎯', n: 'Polyvalent', cat: 'Sport', u: 'sports différents pratiqués', steps: [2, 4, 6, 10, 15], v: s => s.sportsDone },
-  { e: '🕯️', n: 'Sérénité', cat: 'Méditation', u: 'séances de méditation', steps: [10, 50, 120, 300, 600], v: s => s.medSessions },
+  { e: '📚', n: 'Bibliophile', cat: 'Lecture', u: 'livres terminés', steps: [3, 12, 25, 50, 100], v: s => s.finished },
+  { e: '📖', n: 'Dévoreur', cat: 'Lecture', u: 'pages lues', steps: [1500, 5000, 12000, 25000, 50000], v: s => s.pages },
+  { e: '💪', n: 'Assidu', cat: 'Sport', u: 'séances de sport', steps: [25, 100, 250, 500, 1000], v: s => s.sessions },
+  { e: '🏃', n: 'Explorateur', cat: 'Sport', u: 'km parcourus', steps: [75, 250, 1000, 2500, 5000], v: s => s.km },
+  { e: '⏱️', n: 'Endurant', cat: 'Sport', u: 'heures de sport', steps: [25, 100, 250, 500, 1000], v: s => s.minutes / 60 },
+  { e: '🧘', n: 'Zen', cat: 'Méditation', u: 'heures de méditation', steps: [3, 15, 50, 120, 250], v: s => s.medMinutes / 60 },
+  { e: '🚭', n: 'Maîtrise', cat: 'Réduire', u: 'périodes sous la limite', steps: [10, 30, 75, 200, 730], v: s => s.reduceOk },
+  { e: '⌛', n: 'Plongé', cat: 'Lecture', u: 'heures de lecture', steps: [10, 40, 120, 250, 500], v: s => s.readMinutes / 60 },
+  { e: '🔥', n: 'Inarrêtable', cat: 'Toutes', u: 'périodes validées d\'affilée (record)', steps: [7, 15, 30, 60, 120], v: s => s.bestAny },
+  { e: '🏆', n: 'Champion', cat: 'Toutes', u: 'périodes validées', steps: [15, 60, 120, 250, 500], v: s => s.periodsOk },
+  { e: '🎯', n: 'Polyvalent', cat: 'Sport', u: 'sports différents pratiqués', steps: [3, 5, 8, 12, 20], v: s => s.sportsDone },
+  { e: '🕯️', n: 'Sérénité', cat: 'Méditation', u: 'séances de méditation', steps: [15, 75, 180, 450, 900], v: s => s.medSessions },
 ];
 // niveau atteint (0 = aucun, 1 = Bronze … 5 = Diamant) et progression vers le suivant
 function badgeLevel(b, s) {
