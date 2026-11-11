@@ -124,6 +124,7 @@ h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 1
 
 /* nav */
 nav{position:fixed;left:0;right:0;bottom:0;background:rgba(13,13,15,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 8px calc(8px + var(--safe-b));display:flex;justify-content:center;z-index:10}
+nav[hidden]{display:none}
 nav .in{display:flex;max-width:520px;width:100%}
 nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--dim);font-size:11px;font-weight:600}
 nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -189,6 +190,16 @@ nav button.on svg{stroke:var(--accent)}
 .loading{min-height:70vh;display:grid;place-items:center;color:var(--muted);text-align:center}
 .pulse{width:14px;height:14px;background:var(--accent);border-radius:4px;transform:rotate(45deg);animation:p 1s infinite alternate;margin:0 auto 14px}
 @keyframes p{to{opacity:.25;transform:rotate(225deg)}}
+
+/* connexion */
+.auth{justify-content:flex-start;padding-top:8vh}
+.btn.google{background:#fff;color:#1f1f1f;gap:10px}
+.or{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:13px;margin:18px 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.link-btn{color:var(--muted);font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:6px 0}
+.auth-switch{text-align:center;color:var(--muted);font-size:14px;margin-top:18px}
+.auth-msg{font-size:13.5px;margin:-4px 0 14px;color:var(--accent)}
+.auth-msg.ko{color:var(--ko)}
 </style>
 </head>
 <body>
@@ -203,6 +214,8 @@ nav button.on svg{stroke:var(--accent)}
 <div id="sheet"></div>
 <div id="toast"></div>
 
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
 <script>
 /* ============ utils ============ */
 const $ = s => document.querySelector(s);
@@ -237,407 +250,336 @@ const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); retu
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 
-/* ============ stores ============ */
-function makeLocalStore() {
-  // Toutes les données tiennent dans un seul objet JSON.
-  // Sur téléphone : plugin Preferences (stockage natif, fiable sur Android et iOS).
-  // Dans le navigateur (développement) : localStorage.
-  const KEY = LOCAL_KEY;
-  let blob = { profile: null, goals: null, weeks: {}, sync: null };
-  const read = async () => {
-    try {
-      if (IS_APP) { const r = await plugin('Preferences').get({ key: KEY }); return r && r.value; }
-      return localStorage.getItem(KEY);
-    } catch (e) { return null; }
+/* ============ configuration & serveur (Supabase) ============
+ * L'app lit et écrit directement dans la base Supabase : rien n'est stocké sur le téléphone,
+ * à part la session de connexion. Toutes les écritures passent par write() (file d'attente).
+ */
+const CFG = window.RESOLIO_CONFIG || {};
+const APP_SCHEME = 'com.quentinfayolle.resolio';
+function redirectUrl(kind) {
+  if (IS_APP) return `${APP_SCHEME}://${kind === 'reset' ? 'reset-password' : 'auth-callback'}`;
+  return location.origin + location.pathname + (kind === 'reset' ? '?reset=1' : '');
+}
+
+// Conversions ligne de la base <-> objet de l'app
+const profileFromRow = (r, user) => ({
+  firstName: r.first_name || '', lastName: r.last_name || '', name: r.first_name || '',
+  photo: r.avatar_url || null, birthDate: r.birth_date || '', city: r.city || '',
+  startWeek: r.start_week || null, createdAt: Date.parse(r.created_at) || Date.now(),
+  email: (user && user.email) || ''
+});
+const profileToRow = p => ({
+  first_name: (p.firstName || '').trim(), last_name: (p.lastName || '').trim(), avatar_url: p.photo || null,
+  birth_date: p.birthDate || null, city: (p.city || '').trim() || null, start_week: p.startWeek || null
+});
+const goalFromRow = r => ({
+  id: r.id, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
+  activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
+  position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
+});
+const goalToRow = (g, uid) => ({
+  id: g.id, user_id: uid, name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
+  activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek, archived_week: g.archivedWeek || null,
+  position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || []
+});
+const weekToRow = (k, d, uid) => ({ user_id: uid, week: k, closed: !!d.closed, result: d.result || null, recap_seen: !!d.recapSeen });
+const entryToRow = (e, k, uid) => ({
+  id: e.id, user_id: uid, goal_id: e.goalId, week: k, date: e.date, cat: e.cat || 'other', amount: num(e.amount) || 0,
+  book: e.book || null, activity: e.activity || null, duration: e.duration || null, distance: e.distance || null,
+  note: e.note || null, at: Math.round(e.at || 0)
+});
+function entryFromRow(r) {
+  const e = { id: r.id, goalId: r.goal_id, cat: r.cat, date: r.date, amount: num(r.amount), at: Number(r.at) || 0 };
+  if (r.book) e.book = r.book;
+  if (r.activity) e.activity = r.activity;
+  if (r.duration) e.duration = num(r.duration);
+  if (r.distance) e.distance = num(r.distance);
+  if (r.note) e.note = r.note;
+  return e;
+}
+
+function createSupabaseBackend() {
+  if (!CFG.supabaseUrl || !CFG.supabaseKey || !window.supabase) return null;
+  const storage = IS_APP ? {
+    getItem: k => plugin('Preferences').get({ key: k }).then(r => r.value),
+    setItem: (k, v) => plugin('Preferences').set({ key: k, value: v }),
+    removeItem: k => plugin('Preferences').remove({ key: k }),
+  } : window.localStorage;
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {
+    auth: { storage, flowType: 'pkce', detectSessionInUrl: !IS_APP, persistSession: true, autoRefreshToken: true }
+  });
+  const chk = ({ data, error }) => { if (error) throw error; return data; };
+  const fetchAll = async (table, order) => {
+    const out = [];
+    for (let from = 0; ; from += 1000) {
+      const rows = chk(await sb.from(table).select('*').order(order).range(from, from + 999));
+      out.push(...rows);
+      if (rows.length < 1000) return out;
+    }
   };
-  let writing = false, pending = false;
-  const persist = async () => {
-    if (writing) { pending = true; return; }
-    writing = true;
-    do {
-      pending = false;
-      const value = JSON.stringify(blob);
-      try {
-        if (IS_APP) await plugin('Preferences').set({ key: KEY, value });
-        else localStorage.setItem(KEY, value);
-      } catch (e) { toast('Enregistrement impossible'); }
-    } while (pending);
-    writing = false;
-  };
+  const chunks = (arr, n = 500) => { const r = []; for (let i = 0; i < arr.length; i += n) r.push(arr.slice(i, i + n)); return r; };
+  const providers = u => (u && u.app_metadata && u.app_metadata.providers) || [];
   return {
-    mode: 'local',
-    async start(on) {
-      const raw = await read();
-      if (raw) { try { blob = Object.assign(blob, JSON.parse(raw)); } catch (e) {} }
-      on('sync', blob.sync); on('profile', blob.profile); on('goals', blob.goals); on('weeks', blob.weeks || {}, true);
+    // ----- connexion -----
+    async getUser() { const { data } = await sb.auth.getSession(); return data.session ? data.session.user : null; },
+    onAuth(cb) { sb.auth.onAuthStateChange((event, session) => setTimeout(() => cb(event, session ? session.user : null), 0)); },
+    hasPassword: u => providers(u).includes('email'),
+    usesGoogle: u => providers(u).includes('google'),
+    async signIn(email, password) { chk(await sb.auth.signInWithPassword({ email, password })); },
+    async signUp(email, password, firstName, lastName) {
+      const d = chk(await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl('auth'), data: { first_name: firstName, last_name: lastName } } }));
+      if (d.user && Array.isArray(d.user.identities) && d.user.identities.length === 0) { const e = new Error('User already registered'); e.code = 'user_already_exists'; throw e; }
+      return { needsConfirm: !d.session };
     },
-    save(name, data) {
-      if (name === 'profile') blob.profile = clone(data);
-      else if (name === 'goals') blob.goals = clone(data);
-      else if (name === 'sync') blob.sync = clone(data);
-      else blob.weeks[name.slice(5)] = clone(data);
-      persist();
+    async signInGoogle() {
+      if (IS_APP) {
+        const d = chk(await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl('auth'), skipBrowserRedirect: true } }));
+        await plugin('Browser').open({ url: d.url });
+      } else {
+        chk(await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl('auth') } }));
+      }
     },
-    // Remplace les données (restauration, ou données du compte) en gardant l'état de synchronisation.
-    async replaceAll(data) { blob = { profile: data.profile || null, goals: data.goals || null, weeks: data.weeks || {}, sync: blob.sync }; await persist(); }
+    // Retour d'un lien (Google, email de confirmation, mot de passe oublié) : com.quentinfayolle.resolio://...?code=...
+    async handleDeepLink(url) {
+      if (!url || !url.startsWith(APP_SCHEME + '://')) return null;
+      try { await plugin('Browser').close(); } catch (e) {}
+      const q = new URL(url.replace(APP_SCHEME + '://', 'https://app/'));
+      const params = new URLSearchParams((q.search || '').slice(1) + '&' + (q.hash || '').slice(1));
+      if (params.get('error_description')) throw new Error(params.get('error_description'));
+      const code = params.get('code');
+      if (!code) return null;
+      chk(await sb.auth.exchangeCodeForSession(code));
+      return url.includes('reset-password') ? 'reset' : 'auth';
+    },
+    async resetPassword(email) { chk(await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl('reset') })); },
+    async updatePassword(password) { chk(await sb.auth.updateUser({ password })); },
+    async signOut() { await sb.auth.signOut({ scope: 'local' }); },
+    async deleteAccount(uid) {
+      const files = (await sb.storage.from('avatars').list(uid)).data || [];
+      if (files.length) await sb.storage.from('avatars').remove(files.map(f => `${uid}/${f.name}`));
+      chk(await sb.rpc('delete_my_account'));
+      await sb.auth.signOut({ scope: 'local' });
+    },
+    // ----- données -----
+    async loadAll(user) {
+      const uid = user.id;
+      const [prow, goals, weeks, entries] = await Promise.all([
+        sb.from('profiles').select('*').eq('id', uid).maybeSingle().then(chk),
+        fetchAll('goals', 'position'), fetchAll('weeks', 'week'), fetchAll('entries', 'at'),
+      ]);
+      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {} };
+      for (const w of weeks) out.weeks[w.week] = { week: w.week, closed: w.closed, result: w.result || undefined, recapSeen: w.recap_seen, entries: [] };
+      for (const r of entries) {
+        const w = out.weeks[r.week] || (out.weeks[r.week] = { week: r.week, closed: false, entries: [] });
+        w.entries.push(entryFromRow(r));
+      }
+      if (!prow) chk(await sb.from('profiles').upsert({ id: uid }));
+      return out;
+    },
+    async saveProfile(uid, p) { chk(await sb.from('profiles').update(profileToRow(p)).eq('id', uid)); },
+    async uploadAvatar(uid, blob) {
+      const path = `${uid}/avatar-${Date.now()}.jpg`;
+      chk(await sb.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true }));
+      const old = ((await sb.storage.from('avatars').list(uid)).data || []).map(f => `${uid}/${f.name}`).filter(n => n !== path);
+      if (old.length) await sb.storage.from('avatars').remove(old);
+      return sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    },
+    async upsertGoals(rows) { if (rows.length) chk(await sb.from('goals').upsert(rows)); },
+    async upsertWeeks(rows) { for (const c of chunks(rows)) chk(await sb.from('weeks').upsert(c, { onConflict: 'user_id,week' })); },
+    async insertEntries(rows) { for (const c of chunks(rows)) chk(await sb.from('entries').insert(c)); },
+    async deleteEntries(ids) { if (ids.length) chk(await sb.from('entries').delete().in('id', ids)); },
+    async replaceAllData(uid, goals, weeks, entries) {
+      chk(await sb.from('goals').delete().eq('user_id', uid));      // efface aussi les enregistrements (cascade)
+      chk(await sb.from('weeks').delete().eq('user_id', uid));
+      for (const c of chunks(goals)) chk(await sb.from('goals').insert(c));
+      for (const c of chunks(weeks)) chk(await sb.from('weeks').insert(c));
+      for (const c of chunks(entries)) chk(await sb.from('entries').insert(c));
+    },
   };
 }
 
-async function initStore() { return makeLocalStore(); }
-
 /* ============ state ============ */
-const state = { profile: null, goals: null, weeks: {}, sync: null, syncBusy: false, got: { p: false, g: false, w: false }, confirmed: false, slow: false };
-let store;
+// phase : 'loading' | 'config' (Supabase non configuré) | 'auth' (pas connecté) | 'offline' | 'setup' (compte sans objectifs) | 'app'
+const state = { phase: 'loading', user: null, profile: null, goals: null, weeks: {}, loadErr: '', legacy: null };
+let backend = null;
 const TABS = ['semaine', 'historique', 'objectifs', 'profil'];
 let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'semaine';
 let lastWeekSeen = curWeek();
+const uid = () => state.user && state.user.id;
 
-const saveGoals = items => { items.forEach((g, i) => { g.position = i; }); state.goals = items; store.save('goals', { items }); markDirty('goals'); render(); };
-const saveWeek = (k, doc) => { state.weeks[k] = doc; store.save('week:' + k, doc); markDirty('weeks', k); render(); };
-const saveProfile = p => { state.profile = p; store.save('profile', p); markDirty('profile'); render(); };
+// File d'attente des écritures : une à la fois, dans l'ordre. En cas d'échec, on recharge depuis la base.
+let writeChain = Promise.resolve(), pendingWrites = 0;
+function write(fn) {
+  pendingWrites++;
+  writeChain = writeChain.then(fn).catch(async e => {
+    console.error(e);
+    toast(navigator.onLine === false ? 'Pas de connexion : modification non enregistrée' : 'Erreur : modification non enregistrée');
+    await reloadData(true);
+  }).finally(() => { pendingWrites--; });
+  return writeChain;
+}
+
+const saveGoals = items => {
+  items.forEach((g, i) => { g.position = i; });
+  state.goals = items; render();
+  const u = uid(); return write(() => backend.upsertGoals(items.map(g => goalToRow(g, u))));
+};
+const saveWeek = (k, doc) => {
+  const old = state.weeks[k] || { entries: [] };
+  state.weeks[k] = doc; render();
+  const before = new Set((old.entries || []).map(e => e.id)), after = new Set((doc.entries || []).map(e => e.id));
+  const added = (doc.entries || []).filter(e => !before.has(e.id)), removed = [...before].filter(id => !after.has(id));
+  const u = uid();
+  return write(async () => {
+    await backend.upsertWeeks([weekToRow(k, doc, u)]);
+    if (added.length) await backend.insertEntries(added.map(e => entryToRow(e, k, u)));
+    if (removed.length) await backend.deleteEntries(removed);
+  });
+};
+const saveProfile = p => { state.profile = p; render(); const u = uid(); return write(() => backend.saveProfile(u, p)); };
 const weekDoc = k => state.weeks[k] || { week: k, entries: [], closed: false };
 const goalsList = () => state.goals || [];
 const goalById = id => goalsList().find(g => g.id === id);
 
-
-/* ============ compte & synchronisation (serveur PocketBase) ============
- * Principe : le téléphone reste la source de vérité au quotidien (tout marche hors ligne).
- * Chaque modification est marquée "à envoyer" (dirty), puis runSync() :
- *   1. envoie les changements locaux (profil, objectifs, semaines + leurs enregistrements),
- *   2. récupère ce qui a changé sur le serveur depuis la dernière fois (autres appareils).
- * Les enregistrements supprimés sont marqués deleted=true côté serveur (pour que les autres appareils le sachent).
- */
-const SYNC_DEFAULT = () => ({
-  url: '', token: '', userId: '', email: '', lastPull: '', lastSync: 0, refreshedAt: 0, error: '',
-  dirty: { profile: false, goals: false, weeks: [] },
-  srv: { goals: {}, weeks: {}, entries: {} },   // correspondance identifiant local -> identifiant serveur
-  avatarSig: '', avatarFile: ''
-});
-const syncOn = () => !!(state.sync && state.sync.url && state.sync.token);
-const saveSync = () => { if (store && state.sync) store.save('sync', state.sync); };
-function markDirty(kind, key) {
-  if (!syncOn()) return;
-  const d = state.sync.dirty;
-  if (kind === 'weeks') { if (!d.weeks.includes(key)) d.weeks.push(key); }
-  else d[kind] = true;
-  saveSync(); scheduleSync();
-}
-function markAllDirty() {
-  state.sync.dirty = { profile: !!state.profile, goals: !!state.goals, weeks: Object.keys(state.weeks).sort() };
-}
-function normalizeUrl(u) {
-  u = String(u || '').trim().replace(/\/+$/, '');
-  if (u && !/^https?:\/\//i.test(u)) u = 'http://' + u;
-  return u;
-}
-
-class ApiError extends Error { constructor(status, message, data) { super(message); this.status = status; this.data = data; } }
-async function api(path, opts = {}) {
-  const base = opts.base || state.sync.url;
-  const headers = {};
-  if (opts.auth !== false && state.sync.token) headers.Authorization = state.sync.token;
-  let body;
-  if (opts.form) body = opts.form;
-  else if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.body); }
-  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 15000);
-  let res;
-  try { res = await fetch(base + '/api/' + path, { method: opts.method || 'GET', headers, body, signal: ctl.signal }); }
-  catch (e) { throw new ApiError(0, 'Serveur injoignable'); }
-  finally { clearTimeout(t); }
-  let data = null;
-  try { data = await res.json(); } catch (e) {}
-  if (!res.ok) throw new ApiError(res.status, (data && data.message) || ('Erreur ' + res.status), data && data.data);
-  return data;
-}
-async function listAll(coll, filter) {
-  const out = [];
-  for (let page = 1; page < 200; page++) {
-    const r = await api(`collections/${coll}/records?perPage=500&page=${page}&sort=updated&skipTotal=1` + (filter ? '&filter=' + encodeURIComponent(filter) : ''));
-    out.push(...r.items);
-    if (r.items.length < 500) break;
-  }
-  return out;
-}
-// Crée ou met à jour un enregistrement, en retrouvant celui qui existe déjà si besoin.
-async function upsert(coll, map, key, body, findFilter) {
-  const id = map[key];
-  if (id) {
-    try { await api(`collections/${coll}/records/${id}`, { method: 'PATCH', body }); return id; }
-    catch (e) { if (e.status !== 404) throw e; delete map[key]; }
-  }
+async function loadData() {
+  if (!state.user) return;
+  state.phase = 'loading'; state.loadErr = ''; render();
   try {
-    const r = await api(`collections/${coll}/records`, { method: 'POST', body: Object.assign({ user: state.sync.userId }, body) });
-    return (map[key] = r.id);
+    const d = await backend.loadAll(state.user);
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
+    state.phase = (d.goals.length || d.profile.startWeek) ? 'app' : 'setup';
+    if (state.phase === 'setup') state.legacy = await readLegacyData();
   } catch (e) {
-    if (e.status !== 400) throw e;
-    const ex = await api(`collections/${coll}/records?perPage=1&skipTotal=1&filter=${encodeURIComponent(findFilter)}`);
-    if (!ex.items[0]) throw e;
-    map[key] = ex.items[0].id;
-    await api(`collections/${coll}/records/${map[key]}`, { method: 'PATCH', body });
-    return map[key];
+    console.error(e);
+    state.phase = 'offline'; state.loadErr = errText(e);
   }
+  render(); maintenance();
 }
-
-const goalToRec = g => ({
-  cid: g.id, name: g.name, emoji: g.emoji || '', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
-  activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek || '', archived_week: g.archivedWeek || '',
-  position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || [], deleted: false
-});
-const recToGoal = r => ({
-  id: r.cid, name: r.name, emoji: r.emoji || '🎯', cat: r.cat || 'other', type: r.type || 'count', unit: r.unit || '',
-  activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
-  position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
-});
-const entryToRec = (e, k) => ({
-  cid: e.id, goal_cid: e.goalId, week: k, date: e.date, cat: e.cat || 'other', amount: e.amount || 0, book: e.book || '',
-  activity: e.activity || '', duration: e.duration || 0, distance: e.distance || 0, note: e.note || '', at: e.at || 0, deleted: false
-});
-function recToEntry(r) {
-  const e = { id: r.cid, goalId: r.goal_cid, cat: r.cat || 'other', date: r.date, at: r.at || 0, amount: r.amount || 0 };
-  if (r.book) e.book = r.book;
-  if (r.activity) e.activity = r.activity;
-  if (r.duration) e.duration = r.duration;
-  if (r.distance) e.distance = r.distance;
-  if (r.note) e.note = r.note;
-  return e;
-}
-const photoSig = ph => ph ? ph.length + ':' + ph.slice(-40) : '';
-
-async function pushAll() {
-  const S = state.sync, D = S.dirty;
-  if (D.profile && state.profile) {
-    const p = state.profile;
-    await api(`collections/users/records/${S.userId}`, { method: 'PATCH', body: { name: p.name || '', start_week: p.startWeek || '' } });
-    const sig = photoSig(p.photo);
-    if (sig !== S.avatarSig) {
-      const fd = new FormData();
-      if (p.photo) fd.append('avatar', await (await fetch(p.photo)).blob(), 'avatar.jpg');
-      else fd.append('avatar', '');
-      const r = await api(`collections/users/records/${S.userId}`, { method: 'PATCH', form: fd });
-      S.avatarSig = sig; S.avatarFile = r.avatar || '';
-    }
-    D.profile = false; saveSync();
-  }
-  if (D.goals && state.goals) {
-    for (const g of state.goals) await upsert('goals', S.srv.goals, g.id, goalToRec(g), `cid = "${g.id}"`);
-    D.goals = false; saveSync();
-  }
-  while (D.weeks.length) {
-    await pushWeek(D.weeks[0]);
-    D.weeks.shift(); saveSync();
-  }
-}
-async function pushWeek(k) {
-  const S = state.sync, w = state.weeks[k];
-  if (!w) return;
-  await upsert('weeks', S.srv.weeks, k, { week: k, closed: !!w.closed, result: w.result || null, recap_seen: !!w.recapSeen }, `week = "${k}"`);
-  const local = new Set();
-  for (const e of (w.entries || [])) {
-    local.add(e.id);
-    const known = S.srv.entries[e.id];
-    if (known && !known.deleted) continue;
-    const m = known ? { [e.id]: known.id } : {};
-    const id = await upsert('entries', m, e.id, entryToRec(e, k), `cid = "${e.id}"`);
-    S.srv.entries[e.id] = { id, week: k, deleted: false };
-  }
-  for (const [cid, known] of Object.entries(S.srv.entries)) {
-    if (known.week !== k || known.deleted || local.has(cid)) continue;
-    try { await api(`collections/entries/records/${known.id}`, { method: 'PATCH', body: { deleted: true } }); }
-    catch (e) { if (e.status !== 404) throw e; }
-    known.deleted = true;
-  }
-}
-
-async function fetchAvatar(u) {
+// Recharge sans écran de chargement (retour dans l'app, ou après une erreur d'écriture)
+async function reloadData(force) {
+  if (!state.user || (!force && pendingWrites) || !['app', 'offline'].includes(state.phase)) return;
   try {
-    const res = await fetch(`${state.sync.url}/api/files/users/${u.id}/${encodeURIComponent(u.avatar)}?thumb=320x320`, { headers: { Authorization: state.sync.token } });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(blob); });
+    const d = await backend.loadAll(state.user);
+    if (!force && pendingWrites) return;
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
+    if (state.phase === 'offline') state.phase = (d.goals.length || d.profile.startWeek) ? 'app' : 'setup';
+    render(); maintenance();
+  } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
+}
+
+// Données de l'ancienne version (stockées sur le téléphone) : proposées à l'import une seule fois
+async function readLegacyData() {
+  try {
+    const raw = IS_APP ? (await plugin('Preferences').get({ key: LOCAL_KEY })).value : localStorage.getItem(LOCAL_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return d && d.goals && d.goals.items && d.goals.items.length ? d : null;
   } catch (e) { return null; }
 }
-
-async function pullAll() {
-  const S = state.sync, D = S.dirty;
-  const filter = S.lastPull ? `updated >= "${S.lastPull}"` : '';
-  let maxU = S.lastPull;
-  const track = r => { if (r.updated > maxU) maxU = r.updated; };
-  const u = await api(`collections/users/records/${S.userId}`);
-  const goals = await listAll('goals', filter); goals.forEach(track);
-  const weeks = await listAll('weeks', filter); weeks.forEach(track);
-  const entries = await listAll('entries', filter); entries.forEach(track);
-
-  // profil
-  if (!D.profile && (u.start_week || state.profile)) {
-    const p = state.profile ? clone(state.profile) : { name: '', photo: null, createdAt: Date.parse(String(u.created).replace(' ', 'T')) || Date.now() };
-    p.name = u.name || p.name || String(u.email || '').split('@')[0];
-    p.startWeek = u.start_week || p.startWeek || curWeek();
-    if ((u.avatar || '') !== S.avatarFile) {
-      p.photo = u.avatar ? await fetchAvatar(u) : null;
-      S.avatarFile = u.avatar || ''; S.avatarSig = photoSig(p.photo);
-    }
-    if (JSON.stringify(p) !== JSON.stringify(state.profile)) { state.profile = p; store.save('profile', p); }
-  }
-  // objectifs
-  if (goals.length) {
-    const items = clone(goalsList());
-    for (const r of goals) {
-      S.srv.goals[r.cid] = r.id;
-      if (D.goals) continue;
-      const i = items.findIndex(g => g.id === r.cid);
-      if (r.deleted) { if (i >= 0) items.splice(i, 1); continue; }
-      if (i >= 0) items[i] = recToGoal(r); else items.push(recToGoal(r));
-    }
-    if (!D.goals) {
-      items.sort((a, b) => (a.position || 0) - (b.position || 0));
-      state.goals = items; store.save('goals', { items });
-    }
-  }
-  // semaines + enregistrements
-  const changed = new Map();
-  const docFor = k => { if (!changed.has(k)) changed.set(k, clone(state.weeks[k] || { week: k, entries: [], closed: false })); return changed.get(k); };
-  for (const r of weeks) {
-    S.srv.weeks[r.week] = r.id;
-    if (D.weeks.includes(r.week)) continue;
-    const doc = docFor(r.week);
-    doc.closed = !!(r.closed || doc.closed);
-    if (r.result) doc.result = r.result;
-    doc.recapSeen = !!(r.recap_seen || doc.recapSeen);
-  }
-  for (const r of entries) {
-    S.srv.entries[r.cid] = { id: r.id, week: r.week, deleted: !!r.deleted };
-    if (D.weeks.includes(r.week)) continue;
-    const doc = docFor(r.week);
-    doc.entries = doc.entries || [];
-    const i = doc.entries.findIndex(e => e.id === r.cid);
-    if (r.deleted) { if (i >= 0) doc.entries.splice(i, 1); }
-    else if (i < 0) doc.entries.push(recToEntry(r));
-  }
-  for (const [k, doc] of changed) {
-    if (doc.closed) {
-      const res = computeResult(k, doc);
-      if (JSON.stringify(res) !== JSON.stringify(doc.result || null)) { doc.result = res; if (!D.weeks.includes(k)) D.weeks.push(k); }
-    }
-    state.weeks[k] = doc; store.save('week:' + k, doc);
-  }
-  S.lastPull = maxU;
+async function forgetLegacyData() {
+  state.legacy = null;
+  try { if (IS_APP) await plugin('Preferences').remove({ key: LOCAL_KEY }); else localStorage.removeItem(LOCAL_KEY); } catch (e) {}
 }
 
-let syncing = false, syncAgain = false, syncTimer = null;
-function scheduleSync(ms = 1500) {
-  if (!syncOn()) return;
-  clearTimeout(syncTimer); syncTimer = setTimeout(() => runSync(false), ms);
-}
-async function runSync(manual) {
-  if (!syncOn()) return;
-  if (syncing) { syncAgain = true; return; }
-  syncing = true; state.syncBusy = true; render();
-  const S = state.sync;
-  try {
-    if (Date.now() - (S.refreshedAt || 0) > 6 * 3600e3) {
-      const r = await api('collections/users/auth-refresh', { method: 'POST' });
-      S.token = r.token; S.refreshedAt = Date.now();
-    }
-    await pushAll();
-    await pullAll();
-    if (state.sync.dirty.weeks.length) await pushAll();
-    S.error = ''; S.lastSync = Date.now();
-    if (manual) toast('Synchronisé ✓');
-  } catch (e) {
-    if (e.status === 401 || e.status === 403) { S.token = ''; S.error = 'Session expirée : reconnecte-toi.'; }
-    else S.error = e.status === 0 ? 'Serveur injoignable' : (e.message || 'Erreur de synchronisation');
-    if (manual) toast(S.error);
-  } finally {
-    syncing = false; state.syncBusy = false; saveSync();
-    if (state.profile && state.goals) maintenance();
-    render();
-    if (syncAgain) { syncAgain = false; scheduleSync(300); }
-  }
-}
-function syncLabel() {
-  const S = state.sync;
-  if (!syncOn()) return S && S.error ? 'Déconnecté' : (IS_APP ? '' : 'Version web (dév.)');
-  if (state.syncBusy) return 'Synchro…';
-  return S.error ? 'Hors ligne' : '● Synchronisé';
-}
-function agoText(t) {
-  if (!t) return 'jamais';
-  const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return "à l'instant";
-  if (m < 60) return `il y a ${m} min`;
-  if (m < 24 * 60) return `il y a ${Math.round(m / 60)} h`;
-  const d = new Date(t); return `le ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+function errText(e) {
+  const code = (e && (e.code || e.error_code)) || '', msg = String((e && e.message) || e || '');
+  if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) return 'Email ou mot de passe incorrect.';
+  if (code === 'email_not_confirmed' || /email not confirmed/i.test(msg)) return 'Confirme d\'abord ton email : clique sur le lien reçu (pense aux spams).';
+  if (code === 'user_already_exists' || /already registered/i.test(msg)) return 'Un compte existe déjà avec cet email. Connecte-toi.';
+  if (code === 'weak_password' || /password should be/i.test(msg)) return 'Mot de passe trop faible : 8 caractères minimum.';
+  if (/rate limit|over_email_send/i.test(code + msg)) return 'Trop de tentatives. Réessaie dans quelques minutes.';
+  if (code === 'same_password') return 'Choisis un mot de passe différent de l\'ancien.';
+  if (/failed to fetch|network|load failed/i.test(msg) || navigator.onLine === false) return 'Pas de connexion internet.';
+  return msg || 'Une erreur est survenue.';
 }
 
-/* ---- connexion ---- */
-let loginMode = 'login', loginBusy = false, loginErr = '', pendingAccount = null;
-function openLogin() { loginErr = ''; renderLogin(); }
-function renderLogin() {
+/* ---- import d'une sauvegarde / des données de l'ancienne version dans le compte ---- */
+async function importIntoAccount(d) {
+  const u = uid(), goals = (d.goals && d.goals.items) || [];
+  const ids = new Set(goals.map(g => g.id));
+  const weeks = [], entries = [];
+  for (const [k, w] of Object.entries(d.weeks || {})) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || pkey(k).getDay() !== 1) continue;
+    weeks.push(weekToRow(k, w, u));
+    for (const e of (w.entries || [])) if (ids.has(e.goalId) && e.date >= k && e.date < addDays(k, 7)) entries.push(entryToRow(e, k, u));
+  }
+  await backend.replaceAllData(u, goals.map((g, i) => goalToRow(Object.assign({}, g, { position: i }), u)), weeks, entries);
+  const p = clone(state.profile);
+  const old = d.profile || {};
+  if (!p.firstName && old.name) p.firstName = old.name;
+  if (!p.firstName && old.firstName) { p.firstName = old.firstName; p.lastName = p.lastName || old.lastName || ''; }
+  p.startWeek = old.startWeek || p.startWeek || curWeek();
+  if (old.photo && /^data:image/.test(old.photo) && !p.photo) {
+    try { p.photo = await backend.uploadAvatar(u, await (await fetch(old.photo)).blob()); } catch (e) {}
+  } else if (old.photo && /^https?:/.test(old.photo) && !p.photo) p.photo = old.photo;
+  await backend.saveProfile(u, p);
+}
+
+/* ---- écrans de connexion ---- */
+let authMode = 'login', authBusy = false, authErr = '', authInfo = '';
+const authDraft = { email: '', password: '', firstName: '', lastName: '' };
+const GOOGLE_ICON = '<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+function viewAuth() {
+  const d = authDraft, busy = authBusy ? 'disabled style="opacity:.6"' : '';
+  const err = authErr ? `<div class="auth-msg ko">${esc(authErr)}</div>` : '';
+  const info = authInfo ? `<div class="auth-msg">${esc(authInfo)}</div>` : '';
+  const google = `<button class="btn google" data-act="auth-google" ${busy}>${GOOGLE_ICON}Continuer avec Google</button><div class="or"><span>ou</span></div>`;
+  const email = `<div class="field"><label>Email</label><input class="inp" id="au-email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${esc(d.email)}"></div>`;
+  let h = `<div class="onb auth"><div class="logo">Resoli<span>o</span></div><p>Tes objectifs de la semaine. Pas d'excuses.</p>`;
+  if (authMode === 'login') {
+    h += google + email + `<div class="field"><label>Mot de passe</label><input class="inp" id="au-pw" type="password" autocomplete="current-password" value="${esc(d.password)}"></div>
+      <button class="link-btn" data-act="auth-mode" data-val="forgot" style="margin:-6px 0 16px">Mot de passe oublié ?</button>
+      ${err}${info}<button class="btn" data-act="auth-login" ${busy}>${authBusy ? 'Connexion…' : 'Se connecter'}</button>
+      <div class="auth-switch">Pas encore de compte ? <button class="link-btn" data-act="auth-mode" data-val="signup">Créer un compte</button></div>`;
+  } else if (authMode === 'signup') {
+    h += google + `<div class="row"><div class="field"><label>Prénom</label><input class="inp" id="au-first" autocomplete="given-name" value="${esc(d.firstName)}"></div>
+      <div class="field"><label>Nom</label><input class="inp" id="au-last" autocomplete="family-name" value="${esc(d.lastName)}"></div></div>` + email +
+      `<div class="field"><label>Mot de passe</label><input class="inp" id="au-pw" type="password" autocomplete="new-password" value="${esc(d.password)}"><div class="hint">8 caractères minimum.</div></div>
+      ${err}<button class="btn" data-act="auth-signup" ${busy}>${authBusy ? 'Création…' : 'Créer mon compte'}</button>
+      <div class="auth-switch">Déjà un compte ? <button class="link-btn" data-act="auth-mode" data-val="login">Se connecter</button></div>`;
+  } else if (authMode === 'forgot') {
+    h += `<h1 style="font-size:24px;margin-bottom:6px">Mot de passe oublié</h1><div class="muted" style="margin-bottom:18px">Indique ton email : tu vas recevoir un lien pour choisir un nouveau mot de passe. Ouvre-le sur ce téléphone.</div>` +
+      email + err + info + `<button class="btn" data-act="auth-forgot" ${busy}>${authBusy ? 'Envoi…' : 'Recevoir le lien'}</button>
+      <div class="auth-switch"><button class="link-btn" data-act="auth-mode" data-val="login">← Retour à la connexion</button></div>`;
+  } else if (authMode === 'check-email') {
+    h += `<div style="font-size:52px;text-align:center;margin:6px 0 10px">📬</div><h1 style="font-size:24px;text-align:center">Vérifie tes mails</h1>
+      <div class="muted" style="text-align:center;margin:10px 0 24px">On t'a envoyé un lien à <b style="color:var(--text)">${esc(d.email)}</b>.<br>Clique dessus pour confirmer ton compte (regarde aussi les spams), puis connecte-toi.</div>
+      <button class="btn" data-act="auth-mode" data-val="login">Me connecter</button>`;
+  }
+  return h + `</div>`;
+}
+function readAuthInputs() {
   const v = id => { const el = $('#' + id); return el ? el.value : null; };
-  const url = v('lg-url') ?? (state.sync.url || ''), email = v('lg-email') ?? (state.sync.email || ''), pw = v('lg-pw') ?? '';
-  const create = loginMode === 'create';
-  openSheet(`<div class="sh-title"><div class="t">Mon compte Resolio</div></div>
-    <div class="seg" style="margin-bottom:18px"><button class="${!create ? 'on' : ''}" data-act="login-mode" data-val="login">Se connecter</button><button class="${create ? 'on' : ''}" data-act="login-mode" data-val="create">Créer un compte</button></div>
-    <div class="field"><label>Serveur</label><input class="inp" id="lg-url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://192.168.1.20:8090" value="${esc(url)}">
-      <div class="hint">L'adresse de ton serveur Resolio. Chez toi, sur le même Wi-Fi : <b>http://IP-de-ton-PC:8090</b></div></div>
-    <div class="field"><label>Email</label><input class="inp" id="lg-email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(email)}"></div>
-    <div class="field"><label>Mot de passe</label><input class="inp" id="lg-pw" type="password" autocomplete="${create ? 'new-password' : 'current-password'}" value="${esc(pw)}">${create ? '<div class="hint">8 caractères minimum.</div>' : ''}</div>
-    ${loginErr ? `<div class="hint" style="color:var(--ko);margin:-4px 0 14px">${esc(loginErr)}</div>` : ''}
-    <button class="btn" data-act="do-login" ${loginBusy ? 'disabled style="opacity:.6"' : ''}>${loginBusy ? 'Connexion…' : create ? 'Créer mon compte' : 'Se connecter'}</button>`);
+  if (v('au-email') !== null) authDraft.email = v('au-email').trim();
+  if (v('au-pw') !== null) authDraft.password = v('au-pw');
+  if (v('au-first') !== null) authDraft.firstName = v('au-first').trim();
+  if (v('au-last') !== null) authDraft.lastName = v('au-last').trim();
 }
-async function doLogin() {
-  if (loginBusy) return;
-  const url = normalizeUrl($('#lg-url').value), email = $('#lg-email').value.trim(), pw = $('#lg-pw').value;
-  if (!url || !email || !pw) { loginErr = 'Remplis le serveur, l\'email et le mot de passe.'; renderLogin(); return; }
-  if (loginMode === 'create' && pw.length < 8) { loginErr = 'Le mot de passe doit faire au moins 8 caractères.'; renderLogin(); return; }
-  loginBusy = true; loginErr = ''; renderLogin();
-  try {
-    if (loginMode === 'create') {
-      await api('collections/users/records', { method: 'POST', base: url, auth: false,
-        body: { email, password: pw, passwordConfirm: pw, name: (state.profile && state.profile.name) || '' } });
+async function authAction(kind) {
+  if (authBusy) return;
+  readAuthInputs();
+  const d = authDraft;
+  authErr = ''; authInfo = '';
+  if (kind !== 'google') {
+    if (!/^\S+@\S+\.\S+$/.test(d.email)) { authErr = 'Indique un email valide.'; render(); return; }
+    if (kind !== 'forgot' && !d.password) { authErr = 'Indique ton mot de passe.'; render(); return; }
+    if (kind === 'signup') {
+      if (!d.firstName || !d.lastName) { authErr = 'Indique ton prénom et ton nom.'; render(); return; }
+      if (d.password.length < 8) { authErr = 'Le mot de passe doit faire au moins 8 caractères.'; render(); return; }
     }
-    const r = await api('collections/users/auth-with-password', { method: 'POST', base: url, auth: false, body: { identity: email, password: pw } });
-    const acc = Object.assign(SYNC_DEFAULT(), { url, token: r.token, userId: r.record.id, email: r.record.email || email, refreshedAt: Date.now() });
-    const prev = state.sync; state.sync = acc;
-    let serverHas = false;
-    try { const c = await api('collections/goals/records?perPage=1&filter=' + encodeURIComponent('deleted = false')); serverHas = c.totalItems > 0; }
-    catch (e) { state.sync = prev; throw e; }
-    state.sync = prev;
-    loginBusy = false;
-    if (serverHas && state.profile) { pendingAccount = acc; openReplaceConfirm(); return; }
-    await activateAccount(acc, serverHas ? 'server' : 'local');
-  } catch (e) {
-    loginBusy = false;
-    loginErr = e.status === 0 ? 'Serveur injoignable. Vérifie l\'adresse et que le serveur est lancé.'
-      : e.status === 400 && loginMode === 'login' ? 'Email ou mot de passe incorrect.'
-      : e.status === 400 ? 'Impossible de créer le compte (email déjà utilisé ?).'
-      : (e.message || 'Erreur');
-    renderLogin();
   }
-}
-function openReplaceConfirm() {
-  openSheet(`<div class="sh-title"><div class="t">Ce compte a déjà des données</div></div>
-    <div class="muted" style="margin-bottom:18px">Les données de ce téléphone vont être <b style="color:var(--text)">remplacées</b> par celles de ton compte. Si tu veux les garder, annule et exporte d'abord une sauvegarde (onglet Profil).</div>
-    <button class="btn" data-act="use-server">Utiliser les données du compte</button>
-    <button class="btn danger" data-act="close-sheet" style="margin-top:8px">Annuler</button>`);
-}
-// mode 'server' : on repart des données du compte ; mode 'local' : on envoie les données du téléphone.
-async function activateAccount(acc, mode) {
-  state.sync = acc;
-  if (mode === 'server') {
-    state.profile = null; state.goals = null; state.weeks = {};
-    await store.replaceAll({});
-  } else markAllDirty();
-  saveSync();
-  closeSheet();
-  toast('Connecté ✓');
-  await runSync(false);
-  render();
-}
-function logout() {
-  const S = state.sync;
-  state.sync = Object.assign(SYNC_DEFAULT(), { url: S.url, email: S.email });
-  saveSync(); render(); toast('Déconnecté. Tes données restent sur ce téléphone.');
+  authBusy = true; render();
+  try {
+    if (kind === 'login') { await backend.signIn(d.email, d.password); d.password = ''; }
+    else if (kind === 'signup') {
+      const r = await backend.signUp(d.email, d.password, d.firstName, d.lastName);
+      d.password = '';
+      if (r.needsConfirm) authMode = 'check-email';
+    }
+    else if (kind === 'forgot') { await backend.resetPassword(d.email); authInfo = 'Lien envoyé ! Regarde tes mails (et les spams).'; }
+    else if (kind === 'google') await backend.signInGoogle();
+  } catch (e) { authErr = errText(e); }
+  authBusy = false; render();
 }
 
 /* ============ goal logic ============ */
@@ -685,8 +627,8 @@ const liveResult = () => computeResult(curWeek(), weekDoc(curWeek()));
 /* ============ weekly closing (lundi 00:00) ============ */
 let recapOpenFor = null;
 function maintenance() {
-  if (!state.profile || !state.goals || !state.confirmed) return;
-  const cur = curWeek();
+  if (state.phase !== 'app' || !state.profile || !state.goals) return;
+  const cur = curWeek(), closing = [];
   let k = state.profile.startWeek || cur, guard = 0;
   const prev = addDays(cur, -7);
   while (k < cur && guard++ < 520) {
@@ -697,18 +639,18 @@ function maintenance() {
       doc.result = computeResult(k, doc);
       doc.recapSeen = k !== prev;
       state.weeks[k] = doc;
-      store.save('week:' + k, doc);
-      markDirty('weeks', k);
+      closing.push(weekToRow(k, doc, uid()));
     }
     k = addDays(k, 7);
   }
+  if (closing.length) write(() => backend.upsertWeeks(closing));
   const pw = state.weeks[prev];
   if (pw && pw.closed && pw.result && !pw.recapSeen && recapOpenFor !== prev && !sheetOpen()) openRecap(prev);
 }
 setInterval(() => {
   if (curWeek() !== lastWeekSeen) { lastWeekSeen = curWeek(); maintenance(); render(); }
 }, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = curWeek(); maintenance(); render(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = curWeek(); reloadData(false); } });
 
 /* ============ stats & badges ============ */
 function computeStats() {
@@ -753,27 +695,37 @@ function ring(p) {
   return `<svg viewBox="0 0 64 64" class="ring"><circle cx="32" cy="32" r="${r}" class="ring-bg"/><circle cx="32" cy="32" r="${r}" class="ring-fg" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(1)}" transform="rotate(-90 32 32)"/></svg>`;
 }
 function brand() {
-  const sync = syncLabel();
-  return `<div class="brand"><span class="dot"></span>Resolio<span class="sync">${sync}</span></div>`;
+  return `<div class="brand"><span class="dot"></span>Resolio<span class="sync">${navigator.onLine === false ? 'Hors ligne' : ''}</span></div>`;
 }
 function render() {
   const app = $('#app');
-  if (!(state.got.p && state.got.g && state.got.w)) {
-    app.innerHTML = `<div class="loading"><div><div class="pulse"></div>Chargement…${state.slow ? '<div style="margin-top:10px;font-size:13px">Tes données mettent du temps à arriver.<br>Vérifie ta connexion.</div>' : ''}</div></div>`;
-    $('#nav').hidden = true; return;
-  }
-  if (!state.profile) { $('#nav').hidden = true; app.innerHTML = viewOnboarding(); return; }
+  const full = html => { $('#nav').hidden = true; app.innerHTML = html; };
+  if (state.phase === 'loading') return full(`<div class="loading"><div><div class="pulse"></div>Chargement…</div></div>`);
+  if (state.phase === 'config') return full(`<div class="onb"><div class="logo">Resoli<span>o</span></div><p>L'application n'est pas encore reliée à sa base de données.</p><div class="hint">Renseigne l'adresse et la clé Supabase dans <b>www/config.js</b> (voir supabase/README.md).</div></div>`);
+  if (state.phase === 'auth') return full(viewAuth());
+  if (state.phase === 'offline') return full(`<div class="onb"><div style="font-size:48px">📡</div><h1 style="font-size:26px">Impossible de joindre Resolio</h1>
+    <p>${esc(state.loadErr || 'Vérifie ta connexion internet.')}</p><button class="btn" data-act="retry">Réessayer</button>
+    <button class="link-btn" data-act="logout" style="display:block;margin:20px auto 0">Se déconnecter</button></div>`);
+  if (state.phase === 'setup') return full(viewSetup());
   $('#nav').hidden = false;
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const v = { semaine: viewWeek, historique: viewHistory, objectifs: viewGoals, profil: viewProfile }[tab];
   app.innerHTML = brand() + v();
 }
 
-function viewOnboarding() {
+// Premier lancement d'un compte : prénom / nom + objectifs de départ (ou import des anciennes données)
+function viewSetup() {
+  const p = state.profile || {};
+  const legacy = state.legacy ? `<div class="card" style="padding:16px;margin-bottom:22px;border:1px solid rgba(245,197,24,.35)">
+      <div style="font-weight:700;margin-bottom:4px">Tu as des données sur ce téléphone 📱</div>
+      <div class="muted" style="font-size:13.5px;margin-bottom:12px">Récupère tes objectifs, séances et ton historique de l'ancienne version dans ton compte.</div>
+      <button class="btn" data-act="import-legacy">Importer mes données</button></div>` : '';
   return `<div class="onb">
     <div class="logo">Resoli<span>o</span></div>
-    <p>Tes objectifs de la semaine. Pas d'excuses.</p>
-    <div class="field"><label>Ton prénom</label><input class="inp" id="onb-name" autocomplete="given-name" placeholder="Quentin"></div>
+    <p>Bienvenue${p.firstName ? ' ' + esc(p.firstName) : ''} ! On prépare ta première semaine.</p>
+    ${legacy}
+    <div class="row"><div class="field"><label>Prénom</label><input class="inp" id="su-first" autocomplete="given-name" value="${esc(p.firstName || '')}"></div>
+      <div class="field"><label>Nom</label><input class="inp" id="su-last" autocomplete="family-name" value="${esc(p.lastName || '')}"></div></div>
     <div class="lbl">Tes objectifs pour commencer</div>
     <div class="defaults">
       <div><span>📖</span><span>Lire <b>100 pages</b></span></div>
@@ -782,7 +734,7 @@ function viewOnboarding() {
     </div>
     <button class="btn" data-act="start">C'est parti</button>
     <div class="hint" style="text-align:center;margin-top:12px">Tu pourras les modifier et en ajouter d'autres.</div>
-    <button class="edit-link" data-act="open-login" style="display:block;margin:22px auto 0">J'ai déjà un compte Resolio</button>
+    <button class="link-btn" data-act="logout" style="display:block;margin:22px auto 0">Se déconnecter</button>
   </div>`;
 }
 
@@ -903,8 +855,13 @@ function viewGoals() {
 function viewProfile() {
   const p = state.profile, s = computeStats();
   const since = p.createdAt ? new Date(p.createdAt) : pkey(p.startWeek || curWeek());
-  const av = p.photo ? `<img src="${esc(p.photo)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase());
-  let h = `<div class="prof-head"><div class="avatar">${av}</div><div><div class="pn">${esc(p.name)}</div><div class="muted" style="font-size:13.5px">Depuis ${MONTHS_L[since.getMonth()]} ${since.getFullYear()}</div><button class="edit-link" data-act="edit-profile">Modifier le profil</button></div></div>`;
+  const full = [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email;
+  const age = ageFrom(p.birthDate);
+  const meta = [p.city, age ? age + ' ans' : '', 'depuis ' + MONTHS_L[since.getMonth()] + ' ' + since.getFullYear()].filter(Boolean).join(' · ');
+  let h = `<div class="prof-head"><div class="avatar">${avatarHtml(p.photo, p.firstName)}</div><div style="min-width:0"><div class="pn">${esc(full)}</div>
+    <div class="muted" style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis">${esc(p.email)}</div>
+    <div class="muted" style="font-size:13px">${esc(meta)}</div>
+    <button class="edit-link" data-act="edit-profile">Modifier le profil</button></div></div>`;
   h += `<h2>Séries</h2><div class="stats">
     <div class="stat hl"><div class="v">${s.streak} 🔥</div><div class="l">semaines validées d'affilée</div></div>
     <div class="stat"><div class="v">${s.best}</div><div class="l">meilleure série</div></div></div>`;
@@ -918,23 +875,16 @@ function viewProfile() {
   const got = BADGES.filter(b => b.t(s)).length;
   h += `<h2>Badges <span class="muted" style="font-family:Inter;font-weight:600;font-size:14px">${got} / ${BADGES.length}</span></h2><div class="badges">` +
     BADGES.map(b => { const ok = b.t(s); return `<div class="badge ${ok ? 'got' : 'locked'}"><div class="b-e">${b.e}</div><div class="b-n">${b.n}</div><div class="b-d">${b.d}</div></div>`; }).join('') + `</div>`;
-  const S = state.sync;
-  if (syncOn()) {
-    h += `<h2>Compte</h2><div class="card" style="padding:16px">
-      <div style="font-weight:600">${esc(S.email)}</div>
-      <div class="muted" style="font-size:13px;word-break:break-all">${esc(S.url)}</div>
-      <div style="font-size:13.5px;margin:10px 0 14px;color:${S.error ? 'var(--ko)' : 'var(--muted)'}">${state.syncBusy ? 'Synchronisation…' : S.error ? esc(S.error) + ' · dernière synchro ' + agoText(S.lastSync) : 'Synchronisé ' + agoText(S.lastSync)}</div>
-      <button class="btn quiet" data-act="sync-now" style="margin-bottom:6px">Synchroniser maintenant</button>
-      <button class="btn danger ${logoutConfirm ? 'confirm' : ''}" data-act="logout">${logoutConfirm ? 'Confirmer la déconnexion' : 'Se déconnecter'}</button></div>`;
-  } else {
-    h += `<h2>Compte</h2><div class="card" style="padding:16px">
-      <div class="muted" style="font-size:13.5px;margin-bottom:14px">${S && S.error ? `<span style="color:var(--ko)">${esc(S.error)}</span><br>` : ''}Connecte-toi à ton serveur Resolio pour sauvegarder tes données en ligne et les retrouver sur tous tes appareils.</div>
-      <button class="btn quiet" data-act="open-login">${S && S.email ? 'Se reconnecter' : 'Se connecter ou créer un compte'}</button></div>`;
-  }
-  h += `<h2>Sauvegarde</h2><div class="card" style="padding:16px">
-    <div class="muted" style="font-size:13.5px;margin-bottom:14px">Tes données sont enregistrées sur ce téléphone. Fais une sauvegarde de temps en temps (Drive, mail…) pour ne rien perdre si tu changes de téléphone.</div>
-    <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter une sauvegarde</button>
-    <button class="btn quiet" data-act="import">Restaurer une sauvegarde</button></div>`;
+  const u = state.user;
+  h += `<h2>Compte</h2><div class="card" style="padding:16px">
+    <div class="muted" style="font-size:13.5px;margin-bottom:14px">Connecté${backend.usesGoogle(u) ? ' avec Google' : ''} : <b style="color:var(--text)">${esc(p.email)}</b>. Tes données sont enregistrées en ligne et disponibles sur tous tes appareils.</div>
+    ${backend.hasPassword(u) ? '<button class="btn quiet" data-act="change-password" style="margin-bottom:10px">Changer mon mot de passe</button>' : ''}
+    <button class="btn quiet" data-act="logout">Se déconnecter</button></div>`;
+  h += `<h2>Mes données</h2><div class="card" style="padding:16px">
+    <div class="muted" style="font-size:13.5px;margin-bottom:14px">Télécharge une copie de toutes tes données, ou importe une sauvegarde (elle remplace les données actuelles du compte).</div>
+    <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter mes données</button>
+    <button class="btn quiet" data-act="import" style="margin-bottom:6px">Importer une sauvegarde</button>
+    <button class="btn danger" data-act="delete-account">Supprimer mon compte</button></div>`;
   h += `<div class="foot">Resolio${APP_VERSION ? ' · v' + esc(APP_VERSION) : ''}</div>`;
   return h;
 }
@@ -1120,21 +1070,92 @@ function archiveGoal() {
 }
 
 /* ---- profile ---- */
-let photoDraft;
+function ageFrom(d) {
+  if (!d) return 0;
+  const b = new Date(d + 'T00:00:00'), n = new Date();
+  let a = n.getFullYear() - b.getFullYear();
+  if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--;
+  return a > 0 && a < 130 ? a : 0;
+}
+function avatarHtml(photo, first) {
+  const initial = esc((first || '?').trim().charAt(0).toUpperCase() || '?');
+  return photo ? `<img src="${esc(photo)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('${initial}'))">` : initial;
+}
+let photoDraft, profileBusy = false;
 function openProfileEditor() {
   photoDraft = state.profile.photo || null;
-  renderProfileEditor();
+  renderProfileEditor(true);
 }
-function renderProfileEditor() {
-  const name = $('#pe-name') ? $('#pe-name').value : state.profile.name;
-  const av = photoDraft ? `<img src="${esc(photoDraft)}" alt="">` : esc((name || '?').charAt(0).toUpperCase());
+function renderProfileEditor(fresh) {
+  const p = state.profile, v = id => (!fresh && $('#' + id)) ? $('#' + id).value : null;
+  const first = v('pe-first') ?? p.firstName, last = v('pe-last') ?? p.lastName;
+  const birth = v('pe-birth') ?? (p.birthDate || ''), city = v('pe-city') ?? (p.city || '');
+  const y = $('#sheet').scrollTop;
   openSheet(`<div class="sh-title"><div class="t">Mon profil</div></div>
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px"><div class="avatar">${av}</div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px"><div class="avatar">${avatarHtml(photoDraft, first)}</div>
       <div style="display:flex;flex-direction:column;gap:8px;flex:1"><label class="btn quiet" style="height:44px;font-size:14px">Choisir une photo<input type="file" id="pe-photo" accept="image/*" hidden></label>
       ${photoDraft ? '<button class="btn danger" style="height:36px;font-size:13.5px" data-act="remove-photo">Retirer la photo</button>' : ''}</div></div>
-    <div class="field"><label>Prénom</label><input class="inp" id="pe-name" value="${esc(name)}" maxlength="30"></div>
-    <button class="btn" data-act="save-profile">Enregistrer</button>`);
+    <div class="row"><div class="field"><label>Prénom</label><input class="inp" id="pe-first" autocomplete="given-name" value="${esc(first)}" maxlength="60"></div>
+      <div class="field"><label>Nom</label><input class="inp" id="pe-last" autocomplete="family-name" value="${esc(last)}" maxlength="60"></div></div>
+    <div class="field"><label>Email</label><input class="inp" value="${esc(p.email)}" disabled style="opacity:.6">${backend.usesGoogle(state.user) ? '<div class="hint">Compte Google.</div>' : ''}</div>
+    <div class="lbl" style="margin-top:22px">Facultatif</div>
+    <div class="field"><label>Date de naissance</label><input class="inp" id="pe-birth" type="date" max="${todayKey()}" value="${esc(birth)}"></div>
+    <div class="field"><label>Ville</label><input class="inp" id="pe-city" autocomplete="address-level2" value="${esc(city)}" maxlength="100" placeholder="ex. Lyon"></div>
+    <button class="btn" data-act="save-profile" ${profileBusy ? 'disabled style="opacity:.6"' : ''}>${profileBusy ? 'Enregistrement…' : 'Enregistrer'}</button>`);
+  $('#sheet').scrollTop = fresh ? 0 : y;
 }
+async function saveProfileForm() {
+  if (profileBusy) return;
+  const first = $('#pe-first').value.trim(), last = $('#pe-last').value.trim();
+  if (!first || !last) { toast('Indique ton prénom et ton nom'); return; }
+  const birth = $('#pe-birth').value, city = $('#pe-city').value.trim();
+  if (birth && (birth > todayKey() || birth < '1900-01-02')) { toast('Date de naissance invalide'); return; }
+  const p = clone(state.profile);
+  Object.assign(p, { firstName: first, lastName: last, name: first, birthDate: birth, city });
+  if (photoDraft !== p.photo) {
+    if (photoDraft && photoDraft.startsWith('data:')) {
+      profileBusy = true; renderProfileEditor();
+      try { p.photo = await backend.uploadAvatar(uid(), await (await fetch(photoDraft)).blob()); }
+      catch (e) { profileBusy = false; renderProfileEditor(); toast('Envoi de la photo impossible : ' + errText(e)); return; }
+      profileBusy = false;
+    } else p.photo = photoDraft || null;
+  }
+  closeSheet(); saveProfile(p); toast('Profil mis à jour');
+}
+
+/* ---- mot de passe ---- */
+let pwBusy = false;
+function openPasswordSheet(fromReset) {
+  openSheet(`<div class="sh-title"><div class="t">${fromReset ? 'Nouveau mot de passe' : 'Changer mon mot de passe'}</div></div>
+    ${fromReset ? '<div class="muted" style="margin-bottom:16px">Choisis ton nouveau mot de passe.</div>' : ''}
+    <div class="field"><label>Nouveau mot de passe</label><input class="inp" id="pw-new" type="password" autocomplete="new-password"><div class="hint">8 caractères minimum.</div></div>
+    <div class="field"><label>Confirme-le</label><input class="inp" id="pw-new2" type="password" autocomplete="new-password"></div>
+    <button class="btn" data-act="save-password">Enregistrer</button>`);
+}
+async function savePassword() {
+  if (pwBusy) return;
+  const a = $('#pw-new').value, b = $('#pw-new2').value;
+  if (a.length < 8) { toast('8 caractères minimum'); return; }
+  if (a !== b) { toast('Les deux mots de passe ne sont pas identiques'); return; }
+  pwBusy = true;
+  try { await backend.updatePassword(a); closeSheet(); toast('Mot de passe modifié ✓'); }
+  catch (e) { toast(errText(e)); }
+  pwBusy = false;
+}
+
+/* ---- suppression du compte ---- */
+function openDeleteAccount() {
+  openSheet(`<div class="sh-title"><div class="t">Supprimer mon compte</div></div>
+    <div class="muted" style="margin-bottom:16px">Ton compte, ton profil, tes objectifs, tes séances et tout ton historique seront <b style="color:var(--ko)">définitivement effacés</b>. Pense à exporter tes données avant si tu veux les garder.</div>
+    <div class="field"><label>Tape SUPPRIMER pour confirmer</label><input class="inp" id="del-confirm" autocapitalize="characters" autocomplete="off"></div>
+    <button class="btn" style="background:var(--ko);color:#fff" data-act="confirm-delete-account">Supprimer définitivement</button>`);
+}
+async function deleteAccount() {
+  if (($('#del-confirm').value || '').trim().toUpperCase() !== 'SUPPRIMER') { toast('Tape SUPPRIMER pour confirmer'); return; }
+  try { await backend.deleteAccount(uid()); closeSheet(); toast('Compte supprimé'); }
+  catch (e) { toast('Suppression impossible : ' + errText(e)); }
+}
+
 function resizeImage(file) {
   return new Promise((res, rej) => {
     const img = new Image(), url = URL.createObjectURL(file);
@@ -1173,20 +1194,32 @@ function markRecapSeen() {
 /* ============ actions ============ */
 const ACTIONS = {
   'tab': el => { tab = el.dataset.tab; history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
-  'start': () => {
-    const name = ($('#onb-name').value || '').trim();
-    if (!name) { toast('Dis-moi ton prénom 🙂'); $('#onb-name').focus(); return; }
+  'start': async () => {
+    const first = ($('#su-first').value || '').trim(), last = ($('#su-last').value || '').trim();
+    if (!first || !last) { toast('Indique ton prénom et ton nom 🙂'); return; }
     const cur = curWeek();
-    if (!state.goals) {
-      const mk = (o, t) => Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
-      saveGoals([
-        mk({ name: 'Lire', emoji: '📖', cat: 'reading', type: 'quantity', unit: 'pages', activities: [], distance: false }, 100),
-        mk({ name: 'Cardio', emoji: '🏃', cat: 'sport', type: 'count', unit: 'séances', activities: ['Course', 'Natation'], distance: true }, 3),
-        mk({ name: 'Musculation', emoji: '🏋️', cat: 'sport', type: 'count', unit: 'séances', activities: [], distance: false }, 3),
-      ]);
-    }
-    saveProfile({ name, photo: null, startWeek: cur, createdAt: Date.now() });
+    const mk = (o, t) => Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
+    const p = Object.assign(clone(state.profile), { firstName: first, lastName: last, name: first, startWeek: cur });
+    state.phase = 'app'; tab = 'semaine';
+    saveProfile(p);
+    saveGoals([
+      mk({ name: 'Lire', emoji: '📖', cat: 'reading', type: 'quantity', unit: 'pages', activities: [], distance: false }, 100),
+      mk({ name: 'Cardio', emoji: '🏃', cat: 'sport', type: 'count', unit: 'séances', activities: ['Course', 'Natation'], distance: true }, 3),
+      mk({ name: 'Musculation', emoji: '🏋️', cat: 'sport', type: 'count', unit: 'séances', activities: [], distance: false }, 3),
+    ]);
   },
+  'import-legacy': async el => {
+    if (!state.legacy) return;
+    el.disabled = true; el.textContent = 'Import en cours…';
+    try { await importIntoAccount(state.legacy); await forgetLegacyData(); toast('Données importées ✓'); await loadData(); }
+    catch (e) { toast('Import impossible : ' + errText(e)); el.disabled = false; el.textContent = 'Importer mes données'; }
+  },
+  'retry': () => loadData(),
+  'auth-mode': el => { readAuthInputs(); authMode = el.dataset.val; authErr = ''; authInfo = ''; render(); window.scrollTo(0, 0); },
+  'auth-login': () => authAction('login'),
+  'auth-signup': () => authAction('signup'),
+  'auth-forgot': () => authAction('forgot'),
+  'auth-google': () => authAction('google'),
   'add': el => openEntrySheet(el.dataset.id),
   'toggle-day': el => toggleDay(el.dataset.id, el.dataset.date),
   'del-entry': el => deleteEntry(el.dataset.id),
@@ -1232,38 +1265,29 @@ const ACTIONS = {
     saveGoals(items); toast('Objectif restauré');
   },
   'edit-profile': () => openProfileEditor(),
-  'open-login': () => openLogin(),
-  'login-mode': el => { loginMode = el.dataset.val; loginErr = ''; renderLogin(); },
-  'do-login': () => doLogin(),
-  'use-server': () => { const a = pendingAccount; pendingAccount = null; if (a) activateAccount(a, 'server'); },
-  'sync-now': () => runSync(true),
-  'logout': () => {
-    if (!logoutConfirm) { logoutConfirm = true; render(); setTimeout(() => { logoutConfirm = false; render(); }, 3000); return; }
-    logoutConfirm = false; logout();
-  },
+  'change-password': () => openPasswordSheet(false),
+  'save-password': () => savePassword(),
+  'delete-account': () => openDeleteAccount(),
+  'confirm-delete-account': () => deleteAccount(),
+  'logout': async () => { closeSheet(); await backend.signOut(); },
   'export': () => exportBackup(),
   'import': () => {
     openSheet(`<div class="sh-title"><div class="t">Restaurer</div></div>
-      <div class="hint" style="margin:0 0 14px">Choisis le fichier de sauvegarde, ou colle son contenu. <b style="color:var(--ko)">Les données actuelles seront remplacées.</b></div>
+      <div class="hint" style="margin:0 0 14px">Choisis le fichier de sauvegarde, ou colle son contenu. <b style="color:var(--ko)">Les données actuelles de ton compte seront remplacées.</b></div>
       <label class="btn quiet" style="margin-bottom:12px">Choisir un fichier<input type="file" id="imp-file" accept=".json,.txt,application/json,text/plain" hidden></label>
       <textarea class="inp" id="imp-text" style="height:140px;padding:12px;font-size:12px" placeholder="…ou colle la sauvegarde ici"></textarea>
       <button class="btn" data-act="do-import" style="margin-top:12px">Restaurer</button>`);
   },
   'do-import': () => doImport($('#imp-text').value),
   'remove-photo': () => { photoDraft = null; renderProfileEditor(); },
-  'save-profile': () => {
-    const name = ($('#pe-name').value || '').trim();
-    if (!name) { toast('Ton prénom ne peut pas être vide'); return; }
-    const p = clone(state.profile); p.name = name; p.photo = photoDraft;
-    closeSheet(); saveProfile(p); toast('Profil mis à jour');
-  },
+  'save-profile': () => saveProfileForm(),
 };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const fn = ACTIONS[el.dataset.act]; if (fn) { e.preventDefault(); fn(el, e); }
 });
 async function exportBackup() {
-  const data = JSON.stringify({ app: 'Resolio', v: 1, exportedAt: new Date().toISOString(), profile: state.profile, goals: state.goals ? { items: state.goals } : null, weeks: state.weeks });
+  const data = JSON.stringify({ app: 'Resolio', v: 2, exportedAt: new Date().toISOString(), profile: state.profile, goals: { items: goalsList() }, weeks: state.weeks }, null, 1);
   const name = 'resolio-sauvegarde-' + todayKey() + '.json';
   if (IS_APP) {
     try {
@@ -1276,12 +1300,16 @@ async function exportBackup() {
   a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
   a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
-function doImport(txt) {
+let importBusy = false;
+async function doImport(txt) {
+  if (importBusy) return;
   let d;
   try { d = JSON.parse(String(txt || '').trim()); } catch (e) { toast('Sauvegarde illisible'); return; }
-  if (!d || !d.profile || !d.weeks) { toast('Ce n\'est pas une sauvegarde Resolio'); return; }
-  if (syncOn()) { state.sync.dirty = { profile: true, goals: true, weeks: Object.keys(d.weeks).sort() }; saveSync(); }
-  store.replaceAll(d).then(() => { toast('Sauvegarde restaurée'); setTimeout(() => location.reload(), 600); }, () => toast('Restauration impossible'));
+  if (!d || !d.weeks || !d.goals || !Array.isArray(d.goals.items)) { toast('Ce n\'est pas une sauvegarde Resolio'); return; }
+  importBusy = true; toast('Import en cours…');
+  try { await importIntoAccount(d); closeSheet(); toast('Sauvegarde importée ✓'); await loadData(); }
+  catch (e) { toast('Import impossible : ' + errText(e)); }
+  importBusy = false;
 }
 document.addEventListener('change', async e => {
   if (e.target.id === 'imp-file' && e.target.files[0]) { try { doImport(await e.target.files[0].text()); } catch (err) { toast('Fichier illisible'); } return; }
@@ -1291,7 +1319,7 @@ document.addEventListener('change', async e => {
   }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'onb-name') ACTIONS.start();
+  if (e.key === 'Enter' && e.target.id === 'au-pw') authAction(authMode === 'signup' ? 'signup' : 'login');
   if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('en-') && e.target.id !== 'en-book') { e.preventDefault(); saveEntry(); }
 });
 window.flfBack = () => {
@@ -1299,9 +1327,9 @@ window.flfBack = () => {
   if (state.profile && tab !== 'semaine') { tab = 'semaine'; render(); window.scrollTo(0, 0); return true; }
   return false;
 };
-window.flfResume = () => { if (curWeek() !== lastWeekSeen) lastWeekSeen = curWeek(); maintenance(); render(); scheduleSync(300); };
-window.addEventListener('online', () => scheduleSync(500));
-setInterval(() => { if (!document.hidden) runSync(false); }, 5 * 60e3);
+window.flfResume = () => { lastWeekSeen = curWeek(); reloadData(false); };
+window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
+window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
 
 /* ============ boot ============ */
@@ -1314,17 +1342,31 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
       App.getInfo().then(i => { APP_VERSION = i.version; if (tab === 'profil') render(); }).catch(() => {});
     } catch (e) {}
   }
-  store = await initStore();
-  const slowT = setTimeout(() => { state.slow = true; render(); }, 10000);
-  store.start((kind, val, confirmed) => {
-    if (kind === 'sync') { state.sync = Object.assign(SYNC_DEFAULT(), val || {}); return; }
-    if (kind === 'profile') { state.profile = val; state.got.p = true; }
-    if (kind === 'goals') { state.goals = val ? (val.items || []) : null; state.got.g = true; }
-    if (kind === 'weeks') { state.weeks = val || {}; state.got.w = true; if (confirmed) { state.confirmed = true; scheduleSync(300); } }
-    if (state.got.p && state.got.g && state.got.w && state.confirmed) { clearTimeout(slowT); state.slow = false; }
-    render();
-    maintenance();
-  }, err => { clearTimeout(slowT); toast('Données inaccessibles pour le moment.'); });
+  backend = window.__RESOLIO_TEST_BACKEND__ || createSupabaseBackend();
+  if (!backend) { state.phase = 'config'; render(); return; }
+
+  const resetFromWeb = !IS_APP && new URLSearchParams(location.search).get('reset') === '1';
+  backend.onAuth((event, user) => {
+    if (event === 'PASSWORD_RECOVERY') setTimeout(() => openPasswordSheet(true), 300);
+    if (user && (!state.user || state.user.id !== user.id)) { state.user = user; loadData(); }
+    else if (user) state.user = user;
+    else if (!user && state.user) {
+      Object.assign(state, { user: null, profile: null, goals: null, weeks: {}, phase: 'auth', legacy: null });
+      authMode = 'login'; tab = 'semaine'; render();
+    }
+  });
+  if (IS_APP) {
+    plugin('App').addListener('appUrlOpen', async ev => {
+      try {
+        const kind = await backend.handleDeepLink(ev.url);
+        if (kind === 'reset') setTimeout(() => openPasswordSheet(true), 600);
+      } catch (e) { state.phase = state.user ? state.phase : 'auth'; authErr = errText(e); render(); }
+    });
+  }
+  const user = await backend.getUser().catch(() => null);
+  if (user && !state.user) { state.user = user; await loadData(); }
+  else if (!state.user) { state.phase = 'auth'; render(); }
+  if (resetFromWeb) { history.replaceState(null, '', location.pathname + location.hash); if (state.user) openPasswordSheet(true); }
 })();
 </script>
 </body>
