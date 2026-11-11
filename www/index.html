@@ -145,7 +145,7 @@ h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 1
 nav{position:fixed;left:0;right:0;bottom:0;background:rgba(13,13,15,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 8px calc(8px + var(--safe-b));display:flex;justify-content:center;z-index:10}
 nav[hidden]{display:none}
 nav .in{display:flex;max-width:520px;width:100%}
-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--dim);font-size:11px;font-weight:600}
+nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--dim);font-size:11px;font-weight:600}
 nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--text)}
 nav button.on svg{stroke:var(--accent)}
@@ -217,6 +217,70 @@ nav button.on svg{stroke:var(--accent)}
 .pulse{width:14px;height:14px;background:var(--accent);border-radius:4px;transform:rotate(45deg);animation:p 1s infinite alternate;margin:0 auto 14px}
 @keyframes p{to{opacity:.25;transform:rotate(225deg)}}
 
+/* amis */
+.avatar.xs{width:40px;height:40px;font-size:16px;border-width:1px;flex:none}
+.friends-btn{height:40px;position:relative;white-space:nowrap}
+.dot-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--ko);color:#fff;font-size:11px;margin-left:4px}
+.pending-card{display:block;width:100%;text-align:left;padding:14px 16px;margin-top:14px;color:var(--accent);font-weight:600;font-size:14px;border:1px solid rgba(245,197,24,.3)}
+.post{background:var(--surface);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+.p-head{display:flex;align-items:center;gap:10px}
+.p-name{font-weight:700;font-size:14.5px}
+.p-time{color:var(--muted);font-size:12.5px}
+.p-del{color:var(--dim);font-size:18px;padding:4px 8px;font-weight:700}
+.p-del.confirm{color:var(--ko);font-size:13px}
+.p-body{display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-weight:600;font-size:15px}
+.p-emoji{font-size:20px;line-height:1.1}
+.p-note{margin-top:8px;font-size:14.5px;color:var(--text);opacity:.9}
+.p-photo{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin-top:12px;background:var(--surface2)}
+.p-foot{display:flex;align-items:center;gap:10px;margin-top:12px}
+.like{height:36px;min-width:52px;padding:0 12px;border-radius:18px;background:var(--surface2);font-weight:700;font-size:14px;color:var(--muted)}
+.like.on{color:var(--ko);background:var(--ko-soft)}
+.like.static{display:inline-flex;align-items:center}
+.p-likers{color:var(--muted);font-size:12.5px}
+.photo-prev{display:flex;align-items:center;gap:12px}
+.photo-prev img{width:96px;height:96px;object-fit:cover;border-radius:12px}
+.code-box{background:var(--surface2);border-radius:16px;padding:16px;text-align:center}
+.code-box .code{font-family:Archivo;font-weight:900;font-size:30px;letter-spacing:.06em;color:var(--accent)}
+/* rétrospective */
+.retro{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column;padding:calc(10px + var(--safe-t)) 0 calc(14px + var(--safe-b))}
+.retro.open{display:flex}
+.r-top{display:flex;align-items:center;justify-content:space-between;padding:4px 18px 10px;font-weight:700;font-size:14px;color:var(--muted)}
+.r-close{height:36px;padding:0 14px;border-radius:18px;background:var(--surface2);color:var(--text);font-weight:600;font-size:14px}
+.r-track{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.r-track::-webkit-scrollbar{display:none}
+.r-slide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;padding:6px 18px;overflow-y:auto}
+.r-intro{flex-direction:column;text-align:center}
+.r-big{font-size:64px}
+.r-kicker{color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:12.5px;margin-top:12px}
+.r-title{font-family:Archivo;font-weight:900;font-size:38px;letter-spacing:-.02em;margin-top:6px}
+.r-sub{color:var(--muted);font-size:17px;margin-top:4px}
+.r-hint{margin-top:34px;color:var(--accent);font-weight:700;animation:nudge 1.4s infinite}
+@keyframes nudge{50%{transform:translateX(8px)}}
+.r-card{width:100%;max-width:440px;border-radius:24px;padding:22px 18px;background:var(--surface);text-align:center;border:2px solid transparent}
+.r-card.ok{border-color:rgba(245,197,24,.6);background:linear-gradient(180deg,rgba(245,197,24,.10),var(--surface) 40%)}
+.r-card.ko{border-color:rgba(224,103,93,.45);background:linear-gradient(180deg,rgba(224,103,93,.09),var(--surface) 40%)}
+.r-avatar{width:96px;height:96px;margin:0 auto;border-radius:50%;overflow:hidden;background:var(--surface2);display:grid;place-items:center;font-family:Archivo;font-weight:900;font-size:38px;color:var(--accent);border:3px solid var(--line)}
+.r-card.ok .r-avatar{border-color:var(--accent)}
+.r-card.ko .r-avatar{border-color:var(--ko)}
+.r-avatar img{width:100%;height:100%;object-fit:cover}
+.r-name{font-family:Archivo;font-weight:800;font-size:24px;margin-top:12px}
+.r-status{display:inline-block;margin-top:8px;padding:6px 14px;border-radius:99px;font-weight:700;font-size:14px}
+.r-card.ok .r-status{background:var(--accent);color:var(--accent-ink)}
+.r-card.ko .r-status{background:var(--ko-soft);color:var(--ko)}
+.r-goals{margin-top:18px;text-align:left}
+.r-goal{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;margin-bottom:8px;background:var(--surface2)}
+.r-goal.ok{box-shadow:inset 3px 0 0 var(--accent)}
+.r-goal.ko{box-shadow:inset 3px 0 0 var(--ko)}
+.r-ic{font-weight:800;width:18px;text-align:center}
+.r-goal.ok .r-ic{color:var(--accent)}
+.r-goal.ko .r-ic{color:var(--ko)}
+.r-gn{flex:1;font-weight:600;font-size:14px}
+.r-gv{color:var(--muted);font-size:12.5px;text-align:right}
+.r-foot{margin-top:14px}
+.r-dots{display:flex;justify-content:center;gap:6px;padding-top:10px;flex-wrap:wrap;padding-inline:20px}
+.r-dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.r-dots i.on{background:var(--accent)}
+
 /* connexion */
 .auth{justify-content:flex-start;padding-top:8vh}
 .btn.google{background:#fff;color:#1f1f1f;gap:10px}
@@ -235,9 +299,11 @@ nav button.on svg{stroke:var(--accent)}
   <button data-act="tab" data-tab="historique"><svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4h4M12 7.5V12l3 2"/></svg>Historique</button>
   <button data-act="tab" data-tab="objectifs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></svg>Objectifs</button>
   <button data-act="tab" data-tab="profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-4 4-5.8 7.5-5.8s6.3 1.8 7.5 5.8"/></svg>Profil</button>
+  <button data-act="tab" data-tab="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5c.9-3.4 3.4-5 6.5-5s5.6 1.6 6.5 5"/><circle cx="17" cy="9.5" r="2.8"/><path d="M16 14.6c2.6-.2 4.7 1.2 5.5 4.4"/></svg>Amis</button>
 </div></nav>
 <div id="overlay" data-act="close-sheet"></div>
 <div id="sheet"></div>
+<div id="retro" class="retro"></div>
 <div id="toast"></div>
 
 <script src="vendor/supabase.js"></script>
@@ -291,22 +357,23 @@ function redirectUrl(kind) {
 const profileFromRow = (r, user) => ({
   firstName: r.first_name || '', lastName: r.last_name || '', name: r.first_name || '',
   photo: r.avatar_url || null, birthDate: r.birth_date || '', city: r.city || '',
-  startWeek: r.start_week || null, recaps: r.recaps || {}, createdAt: Date.parse(r.created_at) || Date.now(),
+  startWeek: r.start_week || null, recaps: r.recaps || {}, friendCode: r.friend_code || '', publicStats: r.public_stats || {},
+  retroSeen: r.retro_seen || {}, retroPublished: r.retro_published || {}, createdAt: Date.parse(r.created_at) || Date.now(),
   email: (user && user.email) || ''
 });
 const profileToRow = p => ({
   first_name: (p.firstName || '').trim(), last_name: (p.lastName || '').trim(), avatar_url: p.photo || null,
   birth_date: p.birthDate || null, city: (p.city || '').trim() || null, start_week: p.startWeek || null,
-  recaps: p.recaps || {}
+  recaps: p.recaps || {}, retro_seen: p.retroSeen || {}, retro_published: p.retroPublished || {}
 });
 const goalFromRow = r => ({
   id: r.id, period: r.period || 'week', metrics: Array.isArray(r.metrics) && r.metrics.length ? r.metrics : undefined,
-  subtype: r.subtype || null, isLimit: !!r.is_limit, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
+  subtype: r.subtype || null, isLimit: !!r.is_limit, shared: r.shared !== false, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
   activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
   position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
 });
 const goalToRow = (g, uid) => ({
-  id: g.id, user_id: uid, period: periodOf(g), metrics: metricsOf(g), subtype: g.subtype || null, is_limit: isLimit(g), name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
+  id: g.id, user_id: uid, period: periodOf(g), metrics: metricsOf(g), subtype: g.subtype || null, is_limit: isLimit(g), shared: g.shared !== false, name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
   activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek, archived_week: g.archivedWeek || null,
   position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || []
 });
@@ -387,8 +454,10 @@ function createSupabaseBackend() {
     async updatePassword(password) { chk(await sb.auth.updateUser({ password })); },
     async signOut() { await sb.auth.signOut({ scope: 'local' }); },
     async deleteAccount(uid) {
-      const files = (await sb.storage.from('avatars').list(uid)).data || [];
-      if (files.length) await sb.storage.from('avatars').remove(files.map(f => `${uid}/${f.name}`));
+      for (const bucket of ['avatars', 'posts']) {
+        const files = (await sb.storage.from(bucket).list(uid, { limit: 1000 })).data || [];
+        if (files.length) await sb.storage.from(bucket).remove(files.map(f => `${uid}/${f.name}`));
+      }
       chk(await sb.rpc('delete_my_account'));
       await sb.auth.signOut({ scope: 'local' });
     },
@@ -418,6 +487,51 @@ function createSupabaseBackend() {
       return out;
     },
     async saveProfile(uid, p) { chk(await sb.from('profiles').update(profileToRow(p)).eq('id', uid)); },
+    // ----- amis, fil, rétrospectives -----
+    async loadSocial() {
+      const [friendships, profiles, posts] = await Promise.all([
+        sb.from('friendships').select('*').then(chk),
+        sb.rpc('my_social_profiles').then(chk),
+        sb.from('posts').select('*').order('created_at', { ascending: false }).limit(POSTS_PAGE).then(chk),
+      ]);
+      const ids = posts.map(p => p.id);
+      const likes = ids.length ? chk(await sb.from('post_likes').select('post_id,user_id').in('post_id', ids)) : [];
+      return { friendships, profiles, posts, likes };
+    },
+    async loadPosts(before) {
+      const posts = chk(await sb.from('posts').select('*').lt('created_at', before).order('created_at', { ascending: false }).limit(POSTS_PAGE));
+      const ids = posts.map(p => p.id);
+      const likes = ids.length ? chk(await sb.from('post_likes').select('post_id,user_id').in('post_id', ids)) : [];
+      return { posts, likes };
+    },
+    async findByCode(code) { return chk(await sb.rpc('find_user_by_code', { code })); },
+    async requestFriend(userId) { chk(await sb.from('friendships').insert({ addressee: userId })); },
+    async acceptFriend(id) { chk(await sb.from('friendships').update({ status: 'accepted' }).eq('id', id)); },
+    async removeFriendship(id) { chk(await sb.from('friendships').delete().eq('id', id)); },
+    async uploadPostPhoto(uid, blob) {
+      const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      chk(await sb.storage.from('posts').upload(path, blob, { contentType: 'image/jpeg' }));
+      return sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
+    },
+    async createPost(row) { return chk(await sb.from('posts').insert(row).select().single()); },
+    async deletePost(id) { chk(await sb.from('posts').delete().eq('id', id)); },
+    async setPostLike(id, on) {
+      if (on) chk(await sb.from('post_likes').insert({ post_id: id }));
+      else chk(await sb.from('post_likes').delete().eq('post_id', id));
+    },
+    async publishResult(row) { chk(await sb.from('period_results').upsert(row, { onConflict: 'user_id,period,start' })); },
+    async loadResults(period, start) {
+      const results = chk(await sb.from('period_results').select('*').eq('period', period).eq('start', start));
+      const ids = results.map(r => r.id);
+      const likes = ids.length ? chk(await sb.from('result_likes').select('result_id,user_id').in('result_id', ids)) : [];
+      return { results, likes };
+    },
+    async setResultLike(id, on) {
+      if (on) chk(await sb.from('result_likes').insert({ result_id: id }));
+      else chk(await sb.from('result_likes').delete().eq('result_id', id));
+    },
+    async savePublicStats(uid, stats) { chk(await sb.from('profiles').update({ public_stats: stats }).eq('id', uid)); },
+
     async upsertScreenTime(rows) { for (const c of chunks(rows)) chk(await sb.from('screen_time').upsert(c, { onConflict: 'user_id,date,package' })); },
     async addUserSport(name, kind) { chk(await sb.from('user_sports').insert({ name, kind })); },
     async uploadAvatar(uid, blob) {
@@ -445,8 +559,8 @@ function createSupabaseBackend() {
 // phase : 'loading' | 'config' (Supabase non configuré) | 'auth' (pas connecté) | 'offline' | 'setup' (compte sans objectifs) | 'app'
 const state = { phase: 'loading', user: null, profile: null, goals: null, weeks: {}, screen: {}, screenPerm: null, sports: [], loadErr: '', legacy: null };
 let backend = null;
-const TABS = ['resolutions', 'historique', 'objectifs', 'profil'];
-let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'resolutions';
+const TABS = ['resolutions', 'historique', 'objectifs', 'profil', 'amis'];
+let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'amis';   // l'onglet Amis s'ouvre par défaut
 let lastWeekSeen = todayKey();
 const uid = () => state.user && state.user.id;
 
@@ -498,6 +612,7 @@ async function loadData() {
     state.phase = 'offline'; state.loadErr = errText(e);
   }
   render(); maintenance();
+  if (state.phase === 'app') { publishResults(); publishPublicStats(); loadSocial(); if (!sheetOpen()) maybeAutoRetro(); }
 }
 // Recharge sans écran de chargement (retour dans l'app, ou après une erreur d'écriture)
 async function reloadData(force) {
@@ -1005,7 +1120,7 @@ function render() {
   if (state.phase === 'setup') return full(viewSetup());
   $('#nav').hidden = false;
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  const v = { resolutions: viewResolutions, historique: viewHistory, objectifs: viewGoals, profil: viewProfile }[tab];
+  const v = { resolutions: viewResolutions, historique: viewHistory, objectifs: viewGoals, profil: viewProfile, amis: viewFriends }[tab];
   app.innerHTML = brand() + v();
 }
 
@@ -1293,7 +1408,7 @@ function openEntrySheet(id) {
     if (mine.length) { removeEntries(mine.map(e => e.id)); toast('Marqué comme pas fait'); return; }
   }
   const acts = (g.activities || []).filter(Boolean);
-  entryDraft = { goalId: id, date: todayKey(), activity: acts[0] || '' };
+  entryDraft = { goalId: id, date: todayKey(), activity: acts[0] || '', share: g.cat !== 'reduce', photo: null };
   renderEntrySheet();
 }
 function renderEntrySheet() {
@@ -1324,12 +1439,24 @@ function renderEntrySheet() {
   if (days.length > 1) h += `<div class="field"><label>Jour</label><div class="chips">` + days.map(dk =>
     `<button class="chip date ${entryDraft.date === dk ? 'on' : ''}" data-act="pick-date" data-val="${dk}">${DAYS[(pkey(dk).getDay() + 6) % 7]}<b>${pkey(dk).getDate()}</b></button>`).join('') + `</div></div>`;
   h += `<div class="field"><label>Note</label><input class="inp" id="en-note" placeholder="Facultatif" maxlength="140"></div>`;
+  if (g.cat === 'reduce') h += `<div class="hint" style="margin:-4px 0 16px">🔒 Les saisies « Réduire » ne sont jamais publiées dans le fil.</div>`;
+  else {
+    h += `<div class="field"><label>Photo</label>${entryDraft.photo
+      ? `<div class="photo-prev"><img src="${esc(entryDraft.photo)}" alt=""><button class="chip" data-act="en-photo-remove">Retirer</button></div>`
+      : `<label class="btn quiet" style="height:46px;font-size:14px">📷 Prendre ou choisir une photo<input type="file" id="en-photo" accept="image/*" hidden></label>`}</div>`;
+    h += `<div class="field"><label>Partage</label><div class="seg">
+      <button class="${entryDraft.share ? 'on' : ''}" data-act="en-share" data-val="1">🌍 Public</button><button class="${entryDraft.share ? '' : 'on'}" data-act="en-share" data-val="0">🔒 Privé</button></div>
+      <div class="hint">${entryDraft.share ? 'Publié dans le fil de tes amis, avec ta note et ta photo.' : 'Visible par toi seul.'}</div></div>`;
+  }
   h += `<button class="btn" data-act="save-entry">Enregistrer</button>`;
-  const keep = sheetOpen() ? readEntryInputs() : null;
+  const keep = sheetOpen() && $('#sheet .sh-title') && entryDraft._rendered ? readEntryInputs() : null;
+  entryDraft._rendered = true;
   openSheet(h);
-  if (keep) for (const [k, v] of Object.entries(keep)) { const el = $('#' + k); if (el) el.value = v; }
+  const restore = keep || entryDraft._keep; entryDraft._keep = null;
+  if (restore) for (const [k, v] of Object.entries(restore)) { const el = $('#' + k); if (el) el.value = v; }
   else if (ms.includes('pages') || ms.includes('quantity')) setTimeout(() => { const el = $('#en-amount'); if (el) el.focus(); }, 280);
 }
+function readEntryKeep() { entryDraft._keep = readEntryInputs(); }
 function readEntryInputs() {
   const o = {}; ['en-amount', 'en-book', 'en-dur', 'en-dist', 'en-note'].forEach(k => { const el = $('#' + k); if (el) o[k] = el.value; }); return o;
 }
@@ -1355,6 +1482,7 @@ function saveEntry() {
   const wk = mondayKey(pkey(e.date)), doc = clone(weekDoc(wk));
   doc.entries.push(e); doc.week = wk;
   closeSheet(); saveWeek(wk, doc);
+  if (entryDraft.share && g.cat !== 'reduce') publishEntry(g, e, entryDraft.photo);
   const after = computePeriod(p, st, entriesBetween(st, nx));
   const ga = after.goals.find(x => x.id === g.id) || { metrics: [{ done: 0, target: 0 }] };
   if (isLimit(g)) {
@@ -1370,13 +1498,17 @@ function toggleDay(id, date) {
   const has = doc.entries.some(e => e.goalId === id && e.date === date);
   const g = goalById(id);
   if (has) doc.entries = doc.entries.filter(e => !(e.goalId === id && e.date === date));
-  else doc.entries.push({ id: rid(), goalId: id, cat: g.cat || 'other', date, amount: 1, at: Date.now() });
+  const added = has ? null : { id: rid(), goalId: id, cat: g.cat || 'other', date, amount: 1, at: Date.now() };
+  if (added) doc.entries.push(added);
   doc.week = wk;
   saveWeek(wk, doc);
+  if (added && date === todayKey()) publishEntry(g, added, null);   // case cochée : publiée (Public par défaut)
+  if (has) social.posts = social.posts.filter(p => !(p.goal_name === g.name && p.user_id === uid() && p.created_at && dkey(new Date(p.created_at)) === date));
 }
 // Retire des enregistrements, où qu'ils soient (une résolution du mois peut en avoir sur plusieurs semaines)
 function removeEntries(ids) {
   const set = new Set(ids);
+  social.posts = social.posts.filter(p => !set.has(p.entry_id));   // la publication part avec la saisie
   for (const [wk, w] of Object.entries(state.weeks)) {
     if (!(w.entries || []).some(e => set.has(e.id))) continue;
     const doc = clone(w); doc.entries = doc.entries.filter(e => !set.has(e.id));
@@ -1415,7 +1547,7 @@ function openGoalEditor(id) {
     goalDraft = Object.assign(clone(g), { _new: false, period: periodOf(g), metrics: ms.slice(), targets: Object.assign({}, curTargets(g)),
       type: g.type || 'count', subtype: g.subtype || (g.cat === 'sport' ? 'any' : g.cat === 'reduce' ? 'alcohol' : null), activities: (g.activities || []).slice() });
   } else {
-    goalDraft = { _new: true, period: period || 'week', name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', subtype: null,
+    goalDraft = { _new: true, period: period || 'week', shared: true, name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', subtype: null,
       metrics: ['count'], targets: {}, activities: [] };
   }
   renderGoalEditor();
@@ -1510,7 +1642,13 @@ function renderGoalEditor() {
       (d.cat === 'screen' ? `<div class="hint" id="ge-screen-hint">Soit ${hm(draftTarget('limit'))} maximum. Le temps est relevé automatiquement sur ton téléphone.</div>` : '') + `</div>`;
     if (d.cat === 'other' && d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
   }
-  // 7. blessure / archivage
+  // 7. partage dans la rétrospective des amis
+  if (d.period !== 'day') {
+    h += `<div class="field"><label>Partage</label><div class="seg">
+      <button class="${d.shared !== false ? 'on' : ''}" data-act="ge-share" data-val="1">🌍 Public</button><button class="${d.shared === false ? 'on' : ''}" data-act="ge-share" data-val="0">🔒 Privé</button></div>
+      <div class="hint">${d.shared !== false ? 'Tes amis voient cette résolution dans leur rétrospective de fin de ' + per + ' (réussie ou non).' : "Elle n'apparaît jamais chez tes amis."}</div></div>`;
+  }
+  // 8. blessure / archivage
   if (!d._new) {
     const inj = injuredNow(goalById(d.id));
     h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cette résolution ne compte pas dans tes bilans.' : 'La résolution ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
@@ -1543,6 +1681,7 @@ function saveGoal() {
     subtype: ['sport', 'reduce', 'screen'].includes(d.cat) ? d.subtype : null, isLimit: d.cat === 'reduce' || d.cat === 'screen',
     unit: d.cat === 'other' ? (ms[0] === 'days' ? 'jours' : ms[0] === 'once' ? '' : (d.unit || '').trim()) : unitOf({ cat: d.cat, subtype: d.subtype, unit: '' }, ms[0]),
     activities: d.cat === 'sport' || (d.cat === 'screen' && d.subtype !== 'total') ? d.activities : [], distance: ms.includes('distance'),
+    shared: d.shared !== false,
   };
   const items = clone(goalsList());
   if (d._new) {
@@ -1735,18 +1874,363 @@ function markRecapSeen() {
   pr.recaps = Object.assign({}, pr.recaps || {}, { [p]: k });
   saveProfile(pr);
   if (recapQueue.length) setTimeout(() => { if (!sheetOpen()) openRecap(recapQueue.shift()); }, 380);
+  else setTimeout(() => maybeAutoRetro(), 400);   // après les bilans perso : la rétrospective des amis
+}
+
+/* ============ amis : fil d'activité, demandes, profils d'amis ============
+ * Les amis ne lisent jamais tes résolutions ni tes saisies : seulement tes publications (posts),
+ * tes bilans de fin de période (period_results, résolutions « Public » uniquement) et ton profil limité.
+ */
+const POSTS_PAGE = 40;
+const social = { more: false, loadingMore: false, loaded: false, loading: false, at: 0, friends: [], incoming: [], outgoing: [], people: {}, posts: [], likes: {}, sub: 'feed' };
+const personName = id => {
+  if (id === uid()) return 'Toi';
+  const p = social.people[id];
+  return p ? [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Quelqu\'un' : 'Quelqu\'un';
+};
+const personAvatar = id => id === uid() ? state.profile.photo : (social.people[id] || {}).avatar_url;
+const personFirst = id => id === uid() ? (state.profile.firstName || 'Toi') : ((social.people[id] || {}).first_name || '?');
+function agoText(iso) {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  if (m < 24 * 60) return `il y a ${Math.round(m / 60)} h`;
+  const d = new Date(iso), days = Math.round(m / 1440);
+  return days < 7 ? `il y a ${days} j` : `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+let socialPromise = null;
+function loadSocial(force) {
+  if (!state.user) return Promise.resolve();
+  if (social.loading) return socialPromise;   // un seul chargement à la fois : les appels suivants l'attendent
+  if (!force && social.loaded && Date.now() - social.at < 30000) return Promise.resolve();
+  social.loading = true;
+  return (socialPromise = loadSocialNow());
+}
+async function loadSocialNow() {
+  try {
+    const d = await backend.loadSocial();
+    const me = uid();
+    social.people = {};
+    for (const p of d.profiles || []) social.people[p.id] = p;
+    social.friends = []; social.incoming = []; social.outgoing = [];
+    for (const f of d.friendships || []) {
+      const other = f.requester === me ? f.addressee : f.requester;
+      const item = { fid: f.id, id: other, since: f.created_at };
+      if (f.status === 'accepted') social.friends.push(item);
+      else if (f.addressee === me) social.incoming.push(item);
+      else social.outgoing.push(item);
+    }
+    social.friends.sort((a, b) => personName(a.id).localeCompare(personName(b.id), 'fr'));
+    social.posts = d.posts || [];
+    social.more = social.posts.length >= POSTS_PAGE;
+    social.likes = {};
+    for (const l of d.likes || []) (social.likes[l.post_id] || (social.likes[l.post_id] = new Set())).add(l.user_id);
+    social.loaded = true; social.at = Date.now();
+  } catch (e) { console.error(e); if (tab === 'amis') toast('Impossible de charger tes amis : ' + errText(e)); }
+  social.loading = false;
+  render();
+}
+
+function viewFriends() {
+  if (!social.loaded) { loadSocial(); }
+  const subs = [['feed', 'Activité'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']];
+  let h = `<div class="ptabs">${subs.map(([k, l]) => `<button class="${k === 'feed' ? 'on' : ''}" data-act="friends-sub" data-val="${k}">${l}</button>`).join('')}</div>`;
+  const pending = social.incoming.length;
+  h += `<div style="display:flex;align-items:flex-end;gap:12px;margin-top:6px"><div style="flex:1"><div class="eyebrow">Tes amis</div><h1>Activité</h1></div>
+    <button class="chip friends-btn" data-act="open-friends">👥 Mes amis · ${social.friends.length}${pending ? ` <span class="dot-badge">${pending}</span>` : ''}</button></div>`;
+  if (!social.loaded) return h + `<div class="loading" style="min-height:30vh"><div><div class="pulse"></div>Chargement…</div></div>`;
+  if (pending) h += `<button class="card pending-card" data-act="open-friends">📬 ${pending} demande${pending > 1 ? 's' : ''} d'ami en attente — touche pour répondre</button>`;
+  if (!social.friends.length && !social.posts.length) {
+    return h + `<div class="empty" style="margin-top:18px">Ajoute tes amis avec leur <b>code ami</b> pour suivre leur activité et leurs rétrospectives.<br><br>
+      Ton code : <b style="color:var(--accent);font-size:17px">${esc(state.profile.friendCode || '…')}</b><br><br><button class="btn" data-act="open-friends">Ajouter un ami</button></div>`;
+  }
+  if (!social.posts.length) return h + `<div class="empty" style="margin-top:18px">Pas encore d'activité. Enregistre une séance ou une lecture en « Public » pour la partager.</div>`;
+  return h + `<div style="height:14px"></div>` + social.posts.map(postCard).join('')
+    + (social.more ? `<button class="btn quiet" data-act="more-posts" ${social.loadingMore ? 'disabled' : ''}>${social.loadingMore ? 'Chargement…' : 'Voir plus'}</button>` : '');
+}
+async function loadMorePosts() {
+  if (social.loadingMore || !social.posts.length) return;
+  social.loadingMore = true; render();
+  try {
+    const d = await backend.loadPosts(social.posts[social.posts.length - 1].created_at);
+    const known = new Set(social.posts.map(p => p.id));
+    social.posts.push(...d.posts.filter(p => !known.has(p.id)));
+    for (const l of d.likes) (social.likes[l.post_id] || (social.likes[l.post_id] = new Set())).add(l.user_id);
+    social.more = d.posts.length >= POSTS_PAGE;
+  } catch (e) { toast('Chargement impossible : ' + errText(e)); }
+  social.loadingMore = false; render();
+}
+function postCard(p) {
+  const me = uid(), mine = p.user_id === me, likers = [...(social.likes[p.id] || [])], liked = likers.includes(me);
+  const names = likers.filter(x => x !== me).map(personFirst);
+  const likeTxt = liked ? (names.length ? `Toi et ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` et ${names.length - 2} autre${names.length > 3 ? 's' : ''}` : ''}` : 'Toi')
+    : names.length ? names.slice(0, 3).join(', ') + (names.length > 3 ? ` et ${names.length - 3} autre${names.length > 4 ? 's' : ''}` : '') : '';
+  return `<div class="post">
+    <div class="p-head"><div class="avatar xs" data-act="${mine ? '' : 'open-friend'}" data-id="${p.user_id}">${avatarHtml(personAvatar(p.user_id), personFirst(p.user_id))}</div>
+      <div style="flex:1;min-width:0"><div class="p-name">${esc(personName(p.user_id))}</div><div class="p-time">${agoText(p.created_at)}</div></div>
+      ${mine ? `<button class="p-del ${pendingPostDel === p.id ? 'confirm' : ''}" data-act="del-post" data-id="${p.id}">${pendingPostDel === p.id ? 'Supprimer ?' : '⋯'}</button>` : ''}</div>
+    <div class="p-body"><span class="p-emoji">${esc(p.goal_emoji || '🎯')}</span><div>${esc(p.body || p.goal_name || '')}</div></div>
+    ${p.note ? `<div class="p-note">${esc(p.note)}</div>` : ''}
+    ${p.photo_url ? `<img class="p-photo" src="${esc(p.photo_url)}" alt="" loading="lazy">` : ''}
+    <div class="p-foot"><button class="like ${liked ? 'on' : ''}" data-act="like-post" data-id="${p.id}" aria-label="J'aime">${liked ? '♥' : '♡'} ${likers.length || ''}</button>
+      <span class="p-likers">${likeTxt ? esc(likeTxt) + ' aime' + (liked && names.length || names.length > 1 ? 'nt' : '') + ' ça' : ''}</span></div>
+  </div>`;
+}
+let pendingPostDel = null;
+async function togglePostLike(id) {
+  const me = uid(), set = social.likes[id] || (social.likes[id] = new Set()), on = !set.has(me);
+  on ? set.add(me) : set.delete(me); render();
+  try { await backend.setPostLike(id, on); }
+  catch (e) { on ? set.delete(me) : set.add(me); render(); toast('Like impossible : ' + errText(e)); }
+}
+async function deletePost(id) {
+  if (pendingPostDel !== id) { pendingPostDel = id; render(); setTimeout(() => { if (pendingPostDel === id) { pendingPostDel = null; render(); } }, 3000); return; }
+  pendingPostDel = null;
+  const keep = social.posts;
+  social.posts = social.posts.filter(p => p.id !== id); render();
+  try { await backend.deletePost(id); toast('Publication supprimée'); }
+  catch (e) { social.posts = keep; render(); toast('Suppression impossible : ' + errText(e)); }
+}
+
+/* ---- publier une saisie ---- */
+function postBody(g, e) {
+  const ms = metricsOf(g);
+  if (ms[0] === 'once' || ms[0] === 'days') return `${g.name} ✓`;
+  const parts = entryDesc(e, g);
+  return [g.name, ...parts].join(' · ');
+}
+function publishEntry(g, e, photo) {
+  if (g.cat === 'reduce') return;   // jamais publié
+  const u = uid();
+  social.stale = true;
+  write(async () => {
+    let photo_url = null;
+    if (photo) photo_url = await backend.uploadPostPhoto(u, await (await fetch(photo)).blob());
+    const row = await backend.createPost({ user_id: u, entry_id: e.id, goal_name: g.name, goal_emoji: g.emoji || '🎯', cat: g.cat || 'other', body: postBody(g, e).slice(0, 300), note: e.note || null, photo_url });
+    if (social.loaded && row) { social.posts.unshift(row); if (tab === 'amis') render(); }
+  });
+}
+function resizePhoto(file, max = 1280) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(); };
+    img.src = url;
+  });
+}
+
+/* ---- gérer ses amis ---- */
+let friendCodeDraft = '', friendBusy = false, removeFriendConfirm = null;
+function openFriendsSheet() {
+  const me = state.profile;
+  const row = (id, right) => `<div class="entry"><div class="avatar xs" ${right.includes('open-friend') ? '' : ''}>${avatarHtml(personAvatar(id), personFirst(id))}</div>
+    <div class="e-main"><div class="e-title">${esc(personName(id))}</div></div>${right}</div>`;
+  let h = `<div class="sh-title"><div class="t">Mes amis</div></div>
+    <div class="code-box"><div class="lbl" style="margin:0 0 4px">Ton code ami</div><div class="code">${esc(me.friendCode || '…')}</div>
+      <button class="btn quiet" style="height:42px;font-size:14px;margin-top:10px" data-act="share-code">Partager mon code</button></div>
+    <div class="field" style="margin-top:18px"><label>Ajouter un ami</label><div class="row" style="gap:8px">
+      <input class="inp" id="fr-code" placeholder="ex. LEA-4F2A" autocapitalize="characters" autocomplete="off" value="${esc(friendCodeDraft)}" style="text-transform:uppercase">
+      <button class="btn" style="flex:0 0 110px;height:50px" data-act="add-friend" ${friendBusy ? 'disabled style="opacity:.6;flex:0 0 110px;height:50px"' : ''}>Ajouter</button></div></div>`;
+  if (social.incoming.length) h += `<div class="lbl">Demandes reçues</div><div class="card" style="padding:4px 16px;margin-bottom:16px">` + social.incoming.map(f => row(f.id,
+    `<button class="chip on" data-act="accept-friend" data-id="${f.fid}">Accepter</button><button class="chip" data-act="remove-friendship" data-id="${f.fid}">Refuser</button>`)).join('') + `</div>`;
+  if (social.outgoing.length) h += `<div class="lbl">Demandes envoyées</div><div class="card" style="padding:4px 16px;margin-bottom:16px">` + social.outgoing.map(f => row(f.id,
+    `<span class="muted" style="font-size:12.5px">en attente</span><button class="chip" data-act="remove-friendship" data-id="${f.fid}">Annuler</button>`)).join('') + `</div>`;
+  h += `<div class="lbl">Mes amis (${social.friends.length})</div>` + (social.friends.length
+    ? `<div class="card" style="padding:4px 16px">` + social.friends.map(f => `<div class="entry" data-act="open-friend" data-id="${f.id}" style="cursor:pointer">
+        <div class="avatar xs">${avatarHtml(personAvatar(f.id), personFirst(f.id))}</div><div class="e-main"><div class="e-title">${esc(personName(f.id))}</div>
+        <div class="e-sub">${esc((social.people[f.id] || {}).friend_code || '')}</div></div><span class="muted">›</span></div>`).join('') + `</div>`
+    : `<div class="empty" style="padding:18px">Pas encore d'amis. Partage ton code !</div>`);
+  openSheet(h);
+}
+async function addFriend() {
+  const code = ($('#fr-code').value || '').trim().toUpperCase();
+  friendCodeDraft = code;
+  if (!/^[A-Z]{2,6}-[A-Z0-9]{4}$/.test(code)) { toast('Code ami invalide (ex. LEA-4F2A)'); return; }
+  if (code === state.profile.friendCode) { toast("C'est ton propre code 😄"); return; }
+  friendBusy = true; openFriendsSheet();
+  try {
+    const found = (await backend.findByCode(code))[0];
+    if (!found) { toast('Aucun compte avec ce code'); }
+    else {
+      const incoming = social.incoming.find(f => f.id === found.id);
+      if (incoming) { await backend.acceptFriend(incoming.fid); toast(`Vous êtes maintenant amis avec ${found.first_name} 🎉`); }
+      else if (social.friends.some(f => f.id === found.id)) toast(`${found.first_name} est déjà ton ami`);
+      else if (social.outgoing.some(f => f.id === found.id)) toast('Demande déjà envoyée');
+      else { await backend.requestFriend(found.id); toast(`Demande envoyée à ${found.first_name}`); }
+      friendCodeDraft = '';
+      await loadSocial(true);
+    }
+  } catch (e) { toast('Ajout impossible : ' + errText(e)); }
+  friendBusy = false;
+  if (sheetOpen()) openFriendsSheet();
+}
+async function friendshipAction(kind, fid) {
+  try {
+    if (kind === 'accept') { await backend.acceptFriend(fid); toast('Demande acceptée 🎉'); }
+    else await backend.removeFriendship(fid);
+    await loadSocial(true);
+  } catch (e) { toast('Action impossible : ' + errText(e)); }
+  if (sheetOpen()) openFriendsSheet();
+}
+function openFriendProfile(id) {
+  const p = social.people[id] || {}, st = p.public_stats || {}, f = social.friends.find(x => x.id === id);
+  const lv = st.badges || [];
+  let h = `<div style="display:flex;align-items:center;gap:16px;margin-bottom:18px"><div class="avatar">${avatarHtml(p.avatar_url, p.first_name)}</div>
+    <div><div class="pn">${esc(personName(id))}</div><div class="muted" style="font-size:13px">${esc(p.friend_code || '')}</div></div></div>`;
+  if (f) {
+    h += `<div class="stats" style="margin-bottom:18px"><div class="stat hl"><div class="v">${st.streak || 0} 🔥</div><div class="l">série en cours</div></div>
+      <div class="stat"><div class="v">${st.best || 0}</div><div class="l">meilleure série</div></div></div>`;
+    h += `<div class="lbl">Badges · ${lv.reduce((a, b) => a + (b || 0), 0)} / ${BADGES.length * TIERS.length} niveaux</div><div class="badges" style="margin-bottom:18px">` + BADGES.map((b, i) => {
+      const t = lv[i] ? TIERS[lv[i] - 1] : null;
+      return `<div class="badge ${t ? 'got' : 'locked'}" style="${t ? `--tier:${t.c}` : ''}"><div class="b-e">${b.e}</div><div class="b-n">${b.n}</div><div class="b-t">${t ? t.n : '—'}</div></div>`;
+    }).join('') + `</div>`;
+    h += `<button class="btn danger ${removeFriendConfirm === id ? 'confirm' : ''}" data-act="remove-friend" data-id="${id}">${removeFriendConfirm === id ? 'Confirmer : retirer de mes amis' : 'Retirer de mes amis'}</button>`;
+  }
+  openSheet(h);
+}
+
+/* ---- partage de tes chiffres (visibles par tes amis sur ton profil) ---- */
+function publishPublicStats() {
+  if (state.phase !== 'app') return;
+  const s = computeStats();
+  const stats = { streak: s.streak, best: s.best, badges: BADGES.map(b => badgeLevel(b, s).lvl) };
+  if (JSON.stringify(stats) === JSON.stringify(state.profile.publicStats || {})) return;
+  state.profile.publicStats = stats;
+  const u = uid();
+  write(() => backend.savePublicStats(u, stats));
+}
+
+/* ============ rétrospectives (fin de semaine, de mois, d'année) ============ */
+const RETRO_PERIODS = ['week', 'month', 'year'];
+const retroLabel = (p, k) => ({ week: 'Semaine du ' + weekLabel(k, true), month: periodTitle('month', k), year: 'Année ' + periodTitle('year', k) })[p];
+// Publie ton bilan de la période terminée (résolutions « Public » uniquement) pour la rétrospective de tes amis
+function publishResults() {
+  if (state.phase !== 'app') return;
+  const pub = Object.assign({}, state.profile.retroPublished || {});
+  let changed = false;
+  for (const p of RETRO_PERIODS) {
+    const last = periodPrev(p, periodStart(p));
+    if ((pub[p] || '') >= last) continue;
+    pub[p] = last; changed = true;
+    const r = periodResult(p, last);
+    const goals = r.goals.filter(x => { const g = goalById(x.id); return g && g.shared !== false; });
+    if (!goals.length) continue;   // rien de public : tu n'apparais pas dans leur rétrospective
+    const counted = goals.filter(x => x.status !== 'injured');
+    const row = {
+      user_id: uid(), period: p, start: last, validated: counted.length > 0 && counted.every(x => x.status === 'ok'),
+      goals: goals.map(x => ({ name: x.name, emoji: x.emoji || '🎯', status: x.status, text: resultPlain(x) })),
+    };
+    write(() => backend.publishResult(row));
+  }
+  if (changed) { const pr = clone(state.profile); pr.retroPublished = pub; saveProfile(pr); }
+}
+function resultPlain(x) {
+  return (x.metrics || []).map(y => y.m === 'once' ? (y.done ? 'fait' : 'pas fait') : fmtPair(y.done, y.target, y.unit) + (y.m === 'limit' ? ' max' : '')).join(' · ') || '';
+}
+// Affichage automatique en plein écran : une fois, et seulement dans les 3 jours qui suivent la fin de la période
+let retroAutoChecked = false;
+async function maybeAutoRetro() {
+  if (retroAutoChecked || state.phase !== 'app' || sheetOpen() || recapOpenFor || retroOpen()) return;
+  retroAutoChecked = true;
+  await loadSocial();
+  const seen = Object.assign({}, state.profile.retroSeen || {}), todo = [];
+  for (const p of RETRO_PERIODS) {
+    const cur = periodStart(p), last = periodPrev(p, cur);
+    if ((seen[p] || '') >= last) continue;
+    if (todayKey() >= addDays(cur, 3)) { seen[p] = last; continue; }   // plus de 3 jours après la fin : trop tard
+    if (social.friends.length) todo.push({ p, k: last });
+  }
+  const shows = [];
+  for (const t of todo) {
+    try { const d = await backend.loadResults(t.p, t.k); if (d.results.some(r => r.user_id !== uid())) shows.push(Object.assign(t, d)); }   // sinon : tes amis n'ont pas encore publié, on revérifiera
+    catch (e) { /* hors ligne : on réessaiera */ }
+  }
+  if (JSON.stringify(seen) !== JSON.stringify(state.profile.retroSeen || {})) { const pr = clone(state.profile); pr.retroSeen = seen; saveProfile(pr); }
+  if (!shows.length) return;
+  if (sheetOpen() || recapOpenFor) { retroAutoChecked = false; return; }   // un bilan s'est ouvert entre-temps : on réessaiera à sa fermeture
+  openRetro(shows, true);
+}
+const retroOpen = () => $('#retro').classList.contains('open');
+let retroState = null;
+async function openRetroFor(p) {
+  const k = periodPrev(p, periodStart(p));
+  if (!social.loaded) await loadSocial(true);
+  try { const d = await backend.loadResults(p, k); openRetro([Object.assign({ p, k }, d)], false); }
+  catch (e) { toast('Rétrospective indisponible : ' + errText(e)); }
+}
+function openRetro(list, auto) {
+  retroState = { list, auto };
+  renderRetro();
+  $('#retro').classList.add('open');
+  $('#retro .r-track').scrollLeft = 0;
+}
+function renderRetro() {
+  const me = uid(), slides = [];
+  for (const it of retroState.list) {
+    const likes = {};
+    for (const l of it.likes || []) (likes[l.result_id] || (likes[l.result_id] = new Set())).add(l.user_id);
+    it.likeMap = likes;
+    slides.push(`<section class="r-slide r-intro"><div class="r-big">${{ week: '🗓️', month: '📅', year: '🎆' }[it.p]}</div>
+      <div class="r-kicker">${esc(retroLabel(it.p, it.k))}</div><div class="r-title">Rétrospective</div>
+      <div class="r-sub">des résolutions de tes amis</div>
+      ${it.results.length ? `<div class="r-hint">Glisse vers la droite →</div>` : `<div class="r-sub" style="margin-top:22px">Aucun bilan partagé pour cette période.</div>`}</section>`);
+    const mine = it.results.filter(r => r.user_id === me);
+    const others = it.results.filter(r => r.user_id !== me && social.people[r.user_id])
+      .sort((a, b) => (b.validated - a.validated) || personName(a.user_id).localeCompare(personName(b.user_id), 'fr'));
+    for (const r of [...mine, ...others]) {
+      const set = likes[r.id] || new Set(), liked = set.has(me), isMe = r.user_id === me;
+      slides.push(`<section class="r-slide"><div class="r-card ${r.validated ? 'ok' : 'ko'}">
+        <div class="r-avatar">${avatarHtml(personAvatar(r.user_id), personFirst(r.user_id))}</div>
+        <div class="r-name">${esc(isMe ? 'Toi' : personName(r.user_id))}</div>
+        <div class="r-status">${r.validated ? '✓ Réussi' : '✗ Pas cette fois'}</div>
+        <div class="r-goals">${(r.goals || []).map(x => `<div class="r-goal ${x.status}"><span class="r-ic">${x.status === 'ok' ? '✓' : x.status === 'injured' ? '🩹' : '✗'}</span>
+          <span class="r-gn">${esc(x.emoji || '')} ${esc(x.name)}</span><span class="r-gv">${esc(x.text || '')}</span></div>`).join('')}</div>
+        <div class="r-foot">${isMe ? `<span class="like static ${set.size ? 'on' : ''}">♥ ${set.size}</span>` : `<button class="like ${liked ? 'on' : ''}" data-act="like-result" data-id="${r.id}">${liked ? '♥' : '♡'} ${set.size || ''}</button>`}</div>
+      </div></section>`);
+    }
+  }
+  $('#retro').innerHTML = `<div class="r-top"><span>${retroState.list.length > 1 ? 'Rétrospectives' : esc(retroLabel(retroState.list[0].p, retroState.list[0].k))}</span>
+    <button class="r-close" data-act="retro-close" aria-label="Fermer">${retroState.auto ? 'Passer' : '✕'}</button></div>
+    <div class="r-track">${slides.join('')}</div><div class="r-dots">${slides.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>`;
+  const track = $('#retro .r-track');
+  track.addEventListener('scroll', () => {
+    const i = Math.round(track.scrollLeft / track.clientWidth);
+    document.querySelectorAll('#retro .r-dots i').forEach((d, j) => d.classList.toggle('on', i === j));
+  }, { passive: true });
+}
+async function toggleResultLike(id) {
+  const me = uid(), it = retroState.list.find(x => x.results.some(r => r.id === id));
+  const set = it.likeMap[id] || new Set(), on = !set.has(me);
+  it.likes = (it.likes || []).filter(l => !(l.result_id === id && l.user_id === me));
+  if (on) it.likes.push({ result_id: id, user_id: me });
+  const x = $('#retro .r-track').scrollLeft; renderRetro(); $('#retro .r-track').scrollLeft = x;
+  try { await backend.setResultLike(id, on); } catch (e) { toast('Like impossible : ' + errText(e)); }
+}
+function closeRetro() {
+  $('#retro').classList.remove('open');
+  if (retroState && retroState.auto) {
+    const pr = clone(state.profile); pr.retroSeen = Object.assign({}, pr.retroSeen || {});
+    for (const it of retroState.list) pr.retroSeen[it.p] = it.k;
+    saveProfile(pr);
+  }
+  retroState = null;
 }
 
 /* ============ actions ============ */
 const ACTIONS = {
-  'tab': el => { tab = el.dataset.tab; history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
+  'tab': el => { tab = el.dataset.tab; if (tab === 'amis') loadSocial(); history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
   'start': () => {
     const first = (setupDraft.first || '').trim(), last = (setupDraft.last || '').trim();
     if (!first || !last) { toast('Indique ton prénom et ton nom 🙂'); return; }
     const goals = goalsList().filter(g => !isArchived(g));
     if (!goals.length) { toast('Ajoute au moins une résolution'); return; }
     const p = Object.assign(clone(state.profile), { firstName: first, lastName: last, name: first, startWeek: state.profile.startWeek || curWeek() });
-    state.phase = 'app'; tab = 'resolutions'; setupDraft.first = null;
+    state.phase = 'app'; tab = 'resolutions'; setupDraft.first = null;   // premier lancement : direction les résolutions
     period = PERIODS.find(x => goals.some(g => periodOf(g) === x));
     saveProfile(p);
     toast("C'est parti, " + first + ' ! 🔥');
@@ -1791,6 +2275,7 @@ const ACTIONS = {
     d.cat = c; d.targets = {}; d.activities = [];
     d.metrics = (CAT_DEFAULT_METRICS[c] || ['count']).slice();
     d.subtype = c === 'sport' ? 'any' : c === 'reduce' ? 'alcohol' : c === 'screen' ? 'total' : null;
+    d.shared = !(c === 'reduce' || c === 'screen');   // Réduire et Temps d'écran : privés par défaut
     if (c === 'other') { d.type = 'count'; d.unit = 'fois'; }
     if (!d.emoji || d.emoji === '🎯' || Object.values(CATS).some(x => x.emoji === d.emoji) || ['🍷', '🚬', '🏃', '🏋️', '📱'].includes(d.emoji))
       d.emoji = c === 'reduce' ? REDUCE_TYPES.alcohol.emoji : c === 'other' ? '🎯' : CATS[c].emoji;
@@ -1866,6 +2351,31 @@ const ACTIONS = {
     saveGoals(items); toast('Objectif restauré');
   },
   'edit-profile': () => openProfileEditor(),
+  'friends-sub': el => { const v = el.dataset.val; if (v !== 'feed') openRetroFor(v); },
+  'open-friends': () => { friendCodeDraft = ''; openFriendsSheet(); loadSocial(true).then(() => { if (sheetOpen() && $('#fr-code')) openFriendsSheet(); }); },
+  'share-code': async () => {
+    const txt = `Ajoute-moi sur Resolio ! Mon code ami : ${state.profile.friendCode}`;
+    if (IS_APP) { try { await plugin('Share').share({ title: 'Mon code ami Resolio', text: txt, dialogTitle: 'Partager mon code' }); return; } catch (e) {} }
+    try { await navigator.clipboard.writeText(state.profile.friendCode); toast('Code copié : ' + state.profile.friendCode); } catch (e) { toast('Ton code : ' + state.profile.friendCode); }
+  },
+  'add-friend': () => addFriend(),
+  'accept-friend': el => friendshipAction('accept', el.dataset.id),
+  'remove-friendship': el => friendshipAction('remove', el.dataset.id),
+  'open-friend': el => { if (el.dataset.id) { removeFriendConfirm = null; openFriendProfile(el.dataset.id); } },
+  'remove-friend': el => {
+    const id = el.dataset.id;
+    if (removeFriendConfirm !== id) { removeFriendConfirm = id; openFriendProfile(id); return; }
+    removeFriendConfirm = null; closeSheet();
+    const f = social.friends.find(x => x.id === id); if (f) friendshipAction('remove', f.fid).then(() => toast('Ami retiré'));
+  },
+  'more-posts': () => loadMorePosts(),
+  'like-post': el => togglePostLike(el.dataset.id),
+  'del-post': el => deletePost(el.dataset.id),
+  'like-result': el => toggleResultLike(el.dataset.id),
+  'retro-close': () => closeRetro(),
+  'en-share': el => { readEntryKeep(); entryDraft.share = el.dataset.val === '1'; renderEntrySheet(); },
+  'en-photo-remove': () => { readEntryKeep(); entryDraft.photo = null; renderEntrySheet(); },
+  'ge-share': el => { readGoalForm(); goalDraft.shared = el.dataset.val === '1'; renderGoalEditor(); },
   'badge': el => openBadge(+el.dataset.i),
   'change-password': () => openPasswordSheet(false),
   'save-password': () => savePassword(),
@@ -1915,6 +2425,11 @@ async function doImport(txt) {
 }
 document.addEventListener('change', async e => {
   if (e.target.id === 'imp-file' && e.target.files[0]) { try { doImport(await e.target.files[0].text()); } catch (err) { toast('Fichier illisible'); } return; }
+  if (e.target.id === 'en-photo' && e.target.files[0]) {
+    try { readEntryKeep(); entryDraft.photo = await resizePhoto(e.target.files[0]); renderEntrySheet(); }
+    catch (err) { toast('Impossible de lire cette image'); }
+    return;
+  }
   if (e.target.id === 'pe-photo' && e.target.files[0]) {
     try { photoDraft = await resizeImage(e.target.files[0]); renderProfileEditor(); }
     catch (err) { toast('Impossible de lire cette image'); }
@@ -1930,11 +2445,12 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('en-') && e.target.id !== 'en-book') { e.preventDefault(); saveEntry(); }
 });
 window.flfBack = () => {
+  if (retroOpen()) { closeRetro(); return true; }
   if (sheetOpen()) { closeSheet(); return true; }
   if (state.profile && tab !== 'resolutions') { tab = 'resolutions'; render(); window.scrollTo(0, 0); return true; }
   return false;
 };
-window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false); };
+window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false).then(() => { if (state.phase === 'app') { publishResults(); retroAutoChecked = false; maybeAutoRetro(); } }); if (tab === 'amis') loadSocial(true); };
 window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
 window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
@@ -1959,7 +2475,10 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
     else if (user) state.user = user;
     else if (!user && state.user) {
       Object.assign(state, { user: null, profile: null, goals: null, weeks: {}, phase: 'auth', legacy: null });
-      authMode = 'login'; tab = 'resolutions'; setupDraft.first = null; render();
+      authMode = 'login'; tab = 'amis'; setupDraft.first = null;
+      Object.assign(social, { loaded: false, friends: [], incoming: [], outgoing: [], people: {}, posts: [], likes: {} }); retroAutoChecked = false;
+      if (retroOpen()) $('#retro').classList.remove('open');
+      render();
     }
   });
   if (IS_APP) {

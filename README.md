@@ -8,6 +8,7 @@ Resolio est une application mobile de résolutions **par jour, semaine, mois ou 
 - **Objectifs** : nouvelle résolution (période ; catégorie Lecture, Sport, Méditation, Réduire ou Autre ; une ou plusieurs mesures : nombre de fois, temps, distance, pages ; maximum à ne pas dépasser pour Réduire ; **Temps d'écran** relevé automatiquement sur Android : tout le téléphone, catégories ou applications), modifier les chiffres, pause blessure, archivage.
 - **Historique** : chaque jour / semaine / mois / année passé, validé ou non, séries et records.
 - **Profil** : nom, prénom, photo, email, date de naissance et ville (facultatifs), séries, totaux, 12 badges à 5 niveaux (Bronze → Diamant).
+- **Amis** (onglet ouvert au démarrage) : ajout par **code ami** unique avec demande à accepter, fil d'activité (tes saisies « Public » et celles de tes amis, note, photo prise ou importée, likes, tout l'historique), profil d'ami (photo, séries, badges). À la fin de chaque semaine, mois et année : **rétrospective** en carrousel plein écran (toi d'abord, puis ceux qui ont réussi en jaune, puis les autres en rouge, avec likes) ; chaque résolution peut être **Public** ou **Privé** pour la rétrospective.
 - **Compte** : connexion par email + mot de passe ou avec Google, mot de passe oublié, suppression du compte.
 
 Toutes les données sont dans une base **Supabase** (une seule base pour tous les comptes, chacun ne voit que ses données) : l'app a besoin d'internet et tu retrouves tout sur n'importe quel téléphone → voir **[supabase/README.md](supabase/README.md)**.

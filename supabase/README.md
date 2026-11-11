@@ -19,7 +19,8 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 4. Nouvelle requête : fais pareil avec `migrations/20261111230000_resolio_categories.sql` (catégories Méditation / Réduire, mesures multiples, liste des sports).
 5. Nouvelle requête : fais pareil avec `migrations/20261111240000_resolio_screen_time.sql` (temps d'écran).
 6. Nouvelle requête : fais pareil avec `migrations/20261111250000_resolio_books.sql` (livre terminé).
-3. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** le bucket `avatars`.
+7. Nouvelle requête : fais pareil avec `migrations/20261111260000_resolio_friends.sql` (amis, fil d'activité, rétrospectives).
+8. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** les buckets `avatars` et `posts`.
 
 | Table | Contenu |
 | --- | --- |
@@ -30,8 +31,13 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 | `sports` | Liste commune des sports (lecture seule) |
 | `user_sports` | Sports ajoutés par un utilisateur (visibles par lui seul) |
 | `screen_time` | Temps d'écran par application et par jour (minutes), envoyé par l'app Android |
+| `friendships` | Demandes d'ami et amitiés (en attente / acceptée), supprimées des deux côtés |
+| `posts` | Publications du fil d'activité (saisies « Public », jamais « Réduire »), avec note et photo |
+| `post_likes` | Likes des publications |
+| `period_results` | Bilan de fin de semaine / mois / année publié pour la rétrospective des amis (résolutions « Public » seulement) |
+| `result_likes` | Likes dans la rétrospective |
 
-Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Les photos sont rangées dans `avatars/<id utilisateur>/`.
+Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Exception : tes **amis** (demande acceptée) voient ton prénom, nom, photo, code ami, séries et badges, tes publications et tes bilans partagés — jamais tes résolutions ni tes saisies elles-mêmes. Les photos sont rangées dans `avatars/<id utilisateur>/` et `posts/<id utilisateur>/`.
 
 ---
 
