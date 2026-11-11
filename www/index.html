@@ -129,13 +129,16 @@ h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 1
 .stat .l{color:var(--muted);font-size:12.5px;font-weight:500}
 .stat.hl .v{color:var(--accent)}
 .badges{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.badge{background:var(--surface);border-radius:16px;padding:14px 8px;text-align:center}
+.badge{background:var(--surface);border-radius:16px;padding:14px 8px 12px;text-align:center;width:100%;display:block}
 .badge .b-e{font-size:28px;line-height:1.1}
 .badge .b-n{font-weight:700;font-size:12.5px;margin-top:6px}
 .badge .b-d{color:var(--muted);font-size:11px;margin-top:2px;line-height:1.3}
 .badge.locked .b-e{filter:grayscale(1);opacity:.28}
 .badge.locked .b-n{color:var(--dim)}
-.badge.got{box-shadow:inset 0 0 0 1px rgba(245,197,24,.35)}
+.badge.got{box-shadow:inset 0 0 0 1.5px var(--tier)}
+.badge .b-t{font-size:11.5px;font-weight:700;margin-top:3px;color:var(--tier,var(--dim));text-transform:uppercase;letter-spacing:.05em}
+.badge .b-bar{height:4px;border-radius:4px;background:var(--surface2);margin:8px 6px 0;overflow:hidden}
+.badge .b-bar i{display:block;height:100%;background:var(--tier,var(--dim))}
 .foot{color:var(--dim);font-size:12.5px;text-align:center;margin-top:28px}
 
 /* nav */
@@ -187,6 +190,7 @@ nav button.on svg{stroke:var(--accent)}
 .switch .k{width:48px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .2s}
 .switch .k::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--text);transition:transform .2s}
 .switch.on .k{background:var(--inj)}
+.switch.fin.on .k{background:var(--accent)}
 .switch.on .k::after{transform:translateX(20px)}
 .switch .s-t{font-weight:600}
 .switch .s-d{font-size:12.5px;color:var(--muted)}
@@ -309,12 +313,13 @@ const goalToRow = (g, uid) => ({
 const weekToRow = (k, d, uid) => ({ user_id: uid, week: k, closed: !!d.closed, result: d.result || null, recap_seen: !!d.recapSeen });
 const entryToRow = (e, k, uid) => ({
   id: e.id, user_id: uid, goal_id: e.goalId, week: k, date: e.date, cat: e.cat || 'other', amount: num(e.amount) || 0,
-  book: e.book || null, activity: e.activity || null, duration: e.duration || null, distance: e.distance || null,
+  book: e.book || null, book_finished: !!e.finished, activity: e.activity || null, duration: e.duration || null, distance: e.distance || null,
   note: e.note || null, at: Math.round(e.at || 0)
 });
 function entryFromRow(r) {
   const e = { id: r.id, goalId: r.goal_id, cat: r.cat, date: r.date, amount: num(r.amount), at: Number(r.at) || 0 };
   if (r.book) e.book = r.book;
+  if (r.book_finished) e.finished = true;
   if (r.activity) e.activity = r.activity;
   if (r.duration) e.duration = num(r.duration);
   if (r.distance) e.distance = num(r.distance);
@@ -903,13 +908,19 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { la
 
 /* ============ stats & badges ============ */
 function computeStats() {
-  let pages = 0, sessions = 0, km = 0, minutes = 0, entries = 0;
-  const books = new Set();
+  let pages = 0, sessions = 0, km = 0, minutes = 0, medMinutes = 0, entries = 0;
+  const books = new Set(), finished = new Set();
   for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) {
     entries++;
-    if (e.cat === 'reading') { pages += num(e.amount); if (e.book) books.add(e.book.trim().toLowerCase()); }
+    if (e.cat === 'reading') {
+      pages += num(e.amount);
+      if (e.book) { books.add(e.book.trim().toLowerCase()); if (e.finished) finished.add(e.book.trim().toLowerCase()); }
+      else if (e.finished) finished.add('#' + e.id);
+    }
     if (e.cat === 'sport') { sessions++; km += num(e.distance); minutes += num(e.duration); }
+    if (e.cat === 'meditation') medMinutes += num(e.duration);
   }
+  // séries hebdomadaires (onglet Profil)
   const closed = Object.values(state.weeks).filter(w => w.closed && w.result).sort((a, b) => a.week < b.week ? -1 : 1);
   let cur = 0, best = 0, validated = 0, total = 0;
   for (const w of closed) {
@@ -919,22 +930,58 @@ function computeStats() {
   }
   const live = liveResult();
   if (live.validated) { cur++; best = Math.max(best, cur); }
-  return { pages, sessions, km, minutes, entries, books: books.size, streak: cur, best, validated, total };
+  // toutes périodes confondues (badges)
+  let periodsOk = 0, goalsOk = 0, reduceOk = 0, screenOk = 0, bestAny = 0;
+  for (const p of PERIODS) {
+    if (!goalsList().some(g => periodOf(g) === p)) continue;
+    const st = periodStats(p);
+    periodsOk += st.valid; bestAny = Math.max(bestAny, st.best);
+    for (const { r } of st.list) for (const x of r.goals) {
+      if (x.status !== 'ok') continue;
+      goalsOk++;
+      const g = goalById(x.id);
+      if (g && g.cat === 'reduce') reduceOk++;
+      if (g && g.cat === 'screen') screenOk++;
+    }
+  }
+  return { pages, sessions, km, minutes, medMinutes, entries, books: books.size, finished: finished.size, streak: cur, best, validated, total,
+    periodsOk, goalsOk, reduceOk, screenOk, bestAny };
 }
-const BADGES = [
-  { e: '👣', n: 'Premier pas', d: '1er enregistrement', t: s => s.entries >= 1 },
-  { e: '✅', n: 'Validée', d: '1 semaine validée', t: s => s.validated >= 1 },
-  { e: '🔥', n: 'En feu', d: 'Série de 4 semaines', t: s => s.best >= 4 },
-  { e: '⚙️', n: 'Machine', d: 'Série de 10 semaines', t: s => s.best >= 10 },
-  { e: '👑', n: 'Inarrêtable', d: 'Série de 25 semaines', t: s => s.best >= 25 },
-  { e: '📚', n: 'Rat de biblio', d: '1 000 pages lues', t: s => s.pages >= 1000 },
-  { e: '🏛️', n: 'Encyclopédie', d: '5 000 pages lues', t: s => s.pages >= 5000 },
-  { e: '📖', n: 'Bibliophile', d: '10 livres différents', t: s => s.books >= 10 },
-  { e: '💪', n: 'Sportif', d: '25 séances', t: s => s.sessions >= 25 },
-  { e: '🥇', n: 'Athlète', d: '100 séances', t: s => s.sessions >= 100 },
-  { e: '🏅', n: 'Marathon', d: '42 km cumulés', t: s => s.km >= 42 },
-  { e: '🌍', n: 'Globe-trotter', d: '500 km cumulés', t: s => s.km >= 500 },
+// 12 badges, 5 niveaux chacun : Bronze → Argent → Or → Platine → Diamant
+const TIERS = [
+  { n: 'Bronze', c: '#cd8a4b', e: '🥉' }, { n: 'Argent', c: '#c9ced6', e: '🥈' }, { n: 'Or', c: '#f5c518', e: '🥇' },
+  { n: 'Platine', c: '#8fd3d6', e: '💠' }, { n: 'Diamant', c: '#b8a6ff', e: '💎' },
 ];
+const BADGES = [
+  { e: '📚', n: 'Bibliophile', cat: 'Lecture', u: 'livres terminés', steps: [1, 5, 10, 25, 50], v: s => s.finished },
+  { e: '📖', n: 'Dévoreur', cat: 'Lecture', u: 'pages lues', steps: [500, 2000, 5000, 10000, 25000], v: s => s.pages },
+  { e: '💪', n: 'Assidu', cat: 'Sport', u: 'séances de sport', steps: [10, 50, 100, 250, 500], v: s => s.sessions },
+  { e: '🏃', n: 'Explorateur', cat: 'Sport', u: 'km parcourus', steps: [42, 100, 500, 1000, 2500], v: s => s.km },
+  { e: '⏱️', n: 'Endurant', cat: 'Sport', u: 'heures de sport', steps: [10, 50, 100, 250, 500], v: s => s.minutes / 60 },
+  { e: '🧘', n: 'Zen', cat: 'Méditation', u: 'heures de méditation', steps: [1, 5, 20, 50, 100], v: s => s.medMinutes / 60 },
+  { e: '🚭', n: 'Maîtrise', cat: 'Réduire', u: 'périodes sous la limite', steps: [5, 15, 30, 100, 365], v: s => s.reduceOk },
+  { e: '📱', n: 'Déconnecté', cat: "Temps d'écran", u: 'périodes sous la limite', steps: [5, 15, 30, 100, 365], v: s => s.screenOk },
+  { e: '🔥', n: 'Inarrêtable', cat: 'Toutes', u: 'périodes validées d\'affilée (record)', steps: [3, 7, 15, 30, 60], v: s => s.bestAny },
+  { e: '🏆', n: 'Champion', cat: 'Toutes', u: 'périodes validées', steps: [5, 25, 50, 100, 250], v: s => s.periodsOk },
+  { e: '✅', n: 'Fiable', cat: 'Toutes', u: 'résolutions tenues', steps: [10, 50, 150, 400, 1000], v: s => s.goalsOk },
+  { e: '👣', n: 'Régulier', cat: 'Toutes', u: 'enregistrements', steps: [10, 100, 250, 500, 1000], v: s => s.entries },
+];
+// niveau atteint (0 = aucun, 1 = Bronze … 5 = Diamant) et progression vers le suivant
+function badgeLevel(b, s) {
+  const v = Math.floor(b.v(s) * 10) / 10;
+  let lvl = 0;
+  while (lvl < b.steps.length && v >= b.steps[lvl]) lvl++;
+  const prev = lvl ? b.steps[lvl - 1] : 0, next = b.steps[lvl];
+  return { v, lvl, next, pct: next ? Math.min(100, (v - prev) / (next - prev) * 100) : 100 };
+}
+function openBadge(i) {
+  const b = BADGES[i], s = computeStats(), L = badgeLevel(b, s);
+  openSheet(`<div class="sh-title"><div class="emoji">${b.e}</div><div><div class="t">${b.n}</div><div class="muted" style="font-size:13px">${esc(b.cat)} · ${fmt(L.v)} ${esc(b.u)}</div></div></div>
+    <div class="card" style="padding:4px 16px;margin-bottom:16px">` + TIERS.map((t, k) => {
+      const ok = L.lvl > k;
+      return `<div class="entry"><div class="e-emoji">${t.e}</div><div class="e-main"><div class="e-title" style="color:${ok ? t.c : 'var(--muted)'}">${t.n}</div><div class="e-sub">${fmt(b.steps[k])} ${esc(b.u)}</div></div>${ok ? '<span class="tag ok">✓</span>' : L.lvl === k ? `<span class="tag">${fmt(Math.max(0, b.steps[k] - L.v))} à faire</span>` : ''}</div>`;
+    }).join('') + `</div><button class="btn quiet" data-act="close-sheet">Fermer</button>`);
+}
 
 /* ============ render ============ */
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
@@ -1081,7 +1128,8 @@ function entryDesc(e, g) {
   if (ms.includes('pages') || ms.includes('quantity')) parts.push(`${fmt(e.amount)} ${ms.includes('pages') ? 'pages' : g.unit || ''}`.trim());
   if (ms.includes('limit')) parts.push(`${fmt(e.amount)} ${e.amount > 1 ? unitOf(g, 'limit') : (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).one}`);
   if (e.activity) parts.push(e.activity);
-  if (e.book) parts.push('« ' + e.book + ' »');
+  if (e.book) parts.push('« ' + e.book + ' »' + (e.finished ? ' 📕 terminé' : ''));
+  else if (e.finished) parts.push('📕 livre terminé');
   if (e.duration) parts.push(fmt(e.duration) + ' min');
   if (e.distance) parts.push(fmt(e.distance) + ' km');
   return parts;
@@ -1184,14 +1232,21 @@ function viewProfile() {
     <div class="stat"><div class="v">${s.best}</div><div class="l">meilleure série</div></div></div>`;
   h += `<h2>Totaux</h2><div class="stats">
     <div class="stat"><div class="v">${fmt(s.pages)}</div><div class="l">pages lues</div></div>
-    <div class="stat"><div class="v">${s.books}</div><div class="l">livres différents</div></div>
+    <div class="stat"><div class="v">${s.finished}</div><div class="l">livres terminés</div></div>
     <div class="stat"><div class="v">${s.sessions}</div><div class="l">séances de sport</div></div>
     <div class="stat"><div class="v">${fmt(s.km)}</div><div class="l">km parcourus</div></div>
-    <div class="stat"><div class="v">${Math.floor(s.minutes / 60)}h${pad(Math.round(s.minutes % 60))}</div><div class="l">de sport enregistrées</div></div>
-    <div class="stat"><div class="v">${s.validated}</div><div class="l">semaines validées</div></div></div>`;
-  const got = BADGES.filter(b => b.t(s)).length;
-  h += `<h2>Badges <span class="muted" style="font-family:Inter;font-weight:600;font-size:14px">${got} / ${BADGES.length}</span></h2><div class="badges">` +
-    BADGES.map(b => { const ok = b.t(s); return `<div class="badge ${ok ? 'got' : 'locked'}"><div class="b-e">${b.e}</div><div class="b-n">${b.n}</div><div class="b-d">${b.d}</div></div>`; }).join('') + `</div>`;
+    <div class="stat"><div class="v">${hm(s.minutes)}</div><div class="l">de sport</div></div>
+    <div class="stat"><div class="v">${hm(s.medMinutes)}</div><div class="l">de méditation</div></div></div>`;
+  const levels = BADGES.map(b => badgeLevel(b, s)), got = levels.reduce((n, L) => n + L.lvl, 0);
+  h += `<h2>Badges <span class="muted" style="font-family:Inter;font-weight:600;font-size:14px">${got} / ${BADGES.length * TIERS.length} niveaux</span></h2><div class="badges">` +
+    BADGES.map((b, i) => {
+      const L = levels[i], t = L.lvl ? TIERS[L.lvl - 1] : null;
+      return `<button class="badge ${t ? 'got' : 'locked'}" data-act="badge" data-i="${i}" style="${t ? `--tier:${t.c}` : ''}">
+        <div class="b-e">${b.e}</div><div class="b-n">${b.n}</div>
+        <div class="b-t">${t ? t.n : 'À débloquer'}</div>
+        <div class="b-d">${L.next ? `${fmt(L.v)} / ${fmt(L.next)}` : 'Niveau max !'}</div>
+        <div class="b-bar"><i style="width:${L.pct}%"></i></div></button>`;
+    }).join('') + `</div><div class="hint" style="margin-top:10px;text-align:center">5 niveaux par badge : 🥉 Bronze · 🥈 Argent · 🥇 Or · 💠 Platine · 💎 Diamant</div>`;
   const u = state.user;
   h += `<h2>Compte</h2><div class="card" style="padding:16px">
     <div class="muted" style="font-size:13.5px;margin-bottom:14px">Connecté${backend.usesGoogle(u) ? ' avec Google' : ''} : <b style="color:var(--text)">${esc(p.email)}</b>. Tes données sont enregistrées en ligne et disponibles sur tous tes appareils.</div>
@@ -1252,7 +1307,8 @@ function renderEntrySheet() {
     h += `<div class="field"><label>Nombre de ${rt.unit}</label><div class="stepper"><button data-act="en-step" data-val="-1">−</button><input class="inp" id="en-amount" type="number" inputmode="numeric" min="1" value="1"><button data-act="en-step" data-val="1">+</button></div>
       <div class="hint">Ton maximum : ${fmt(curTargets(g).limit)} ${rt.unit} par ${P[periodOf(g)].per}.</div></div>`;
   }
-  if (g.cat === 'reading') h += `<div class="field"><label>Livre</label><input class="inp" id="en-book" list="books" placeholder="Titre du livre" value="${esc(lastBook())}"><datalist id="books">${allBooks().map(b => `<option value="${esc(b)}">`).join('')}</datalist></div>`;
+  if (g.cat === 'reading') h += `<div class="field"><label>Livre</label><input class="inp" id="en-book" list="books" placeholder="Titre du livre" value="${esc(lastBook())}"><datalist id="books">${allBooks().map(b => `<option value="${esc(b)}">`).join('')}</datalist>
+    <div class="switch ${entryDraft.finished ? 'on' : ''} fin" style="margin-top:10px;cursor:pointer" role="switch" aria-checked="${!!entryDraft.finished}" data-act="en-finished"><div><div class="s-t">📕 J'ai terminé ce livre</div><div class="s-d">Compte pour le badge Bibliophile</div></div><div class="k"></div></div></div>`;
   if (acts.length) h += `<div class="field"><label>Activité</label><div class="chips">${acts.map(a => `<button class="chip ${entryDraft.activity === a ? 'on' : ''}" data-act="pick-act" data-val="${esc(a)}">${esc(a)}</button>`).join('')}</div></div>`;
   const legacySport = g.cat === 'sport' && !Array.isArray(g.metrics);   // anciennes résolutions sport : durée / distance facultatives
   const needTime = ms.includes('time'), needDist = ms.includes('distance');
@@ -1289,6 +1345,7 @@ function saveEntry() {
   if (ms.includes('time') && !(num(v['en-dur']) > 0)) { toast('Indique la durée (en minutes)'); return; }
   if (ms.includes('distance') && !(num(v['en-dist']) > 0)) { toast('Indique la distance (en km)'); return; }
   if (v['en-book'] && v['en-book'].trim()) e.book = v['en-book'].trim().slice(0, 120);
+  if (g.cat === 'reading' && entryDraft.finished) e.finished = true;
   if (entryDraft.activity) e.activity = entryDraft.activity;
   if (num(v['en-dur']) > 0) e.duration = num(v['en-dur']);
   if (num(v['en-dist']) > 0) e.distance = num(v['en-dist']);
@@ -1711,6 +1768,7 @@ const ACTIONS = {
   'del-entry': el => deleteEntry(el.dataset.id),
   'close-sheet': () => closeSheet(),
   'pick-date': el => { entryDraft.date = el.dataset.val; renderEntrySheet(); },
+  'en-finished': () => { entryDraft.finished = !entryDraft.finished; renderEntrySheet(); },
   'pick-act': el => { entryDraft.activity = entryDraft.activity === el.dataset.val ? '' : el.dataset.val; renderEntrySheet(); },
   'save-entry': () => saveEntry(),
   'new-goal': () => openGoalEditor(null),
@@ -1808,6 +1866,7 @@ const ACTIONS = {
     saveGoals(items); toast('Objectif restauré');
   },
   'edit-profile': () => openProfileEditor(),
+  'badge': el => openBadge(+el.dataset.i),
   'change-password': () => openPasswordSheet(false),
   'save-password': () => savePassword(),
   'delete-account': () => openDeleteAccount(),

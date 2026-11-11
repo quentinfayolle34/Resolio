@@ -18,6 +18,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 3. Nouvelle requête : fais pareil avec `migrations/20261111220000_resolio_periods.sql` (résolutions jour / semaine / mois / année + bilans).
 4. Nouvelle requête : fais pareil avec `migrations/20261111230000_resolio_categories.sql` (catégories Méditation / Réduire, mesures multiples, liste des sports).
 5. Nouvelle requête : fais pareil avec `migrations/20261111240000_resolio_screen_time.sql` (temps d'écran).
+6. Nouvelle requête : fais pareil avec `migrations/20261111250000_resolio_books.sql` (livre terminé).
 3. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** le bucket `avatars`.
 
 | Table | Contenu |
