@@ -54,7 +54,22 @@ h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 1
 .goal:not(.done) .add svg{stroke:var(--accent-ink)}
 .bar{height:6px;border-radius:6px;background:var(--surface2);margin-top:14px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--text);border-radius:6px;transition:width .4s}
-.goal.done .bar i{background:var(--accent)}
+.goal.done .bar i,.bar.full i{background:var(--accent)}
+.bar.lim i{background:var(--muted)}
+.bar.over i{background:var(--ko)}
+.bar.sm{height:5px;margin-top:6px}
+.mbars{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.mrow span{font-size:12.5px;color:var(--muted);font-weight:600}
+.add.neutral{background:var(--surface2)!important}
+.add.neutral svg{stroke:var(--text)!important}
+.chips.multi .chip.on{background:var(--accent);color:var(--accent-ink)}
+.chips.small .chip{height:34px;font-size:13px;padding:0 11px}
+.chip.mine{border:1px dashed var(--dim)}
+.trow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.trow .tl{flex:1;font-weight:600;font-size:14px}
+.trow .stepper{flex:0 0 190px}
+.trow .stepper button{width:44px;height:44px}
+.trow .stepper .inp{height:44px;font-size:18px}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--surface2);color:var(--muted)}
 .tag.ok{background:var(--accent-soft);color:var(--accent)}
 .tag.ko{background:var(--ko-soft);color:var(--ko)}
@@ -280,12 +295,13 @@ const profileToRow = p => ({
   recaps: p.recaps || {}
 });
 const goalFromRow = r => ({
-  id: r.id, period: r.period || 'week', name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
+  id: r.id, period: r.period || 'week', metrics: Array.isArray(r.metrics) && r.metrics.length ? r.metrics : undefined,
+  subtype: r.subtype || null, isLimit: !!r.is_limit, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
   activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
   position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
 });
 const goalToRow = (g, uid) => ({
-  id: g.id, user_id: uid, period: periodOf(g), name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
+  id: g.id, user_id: uid, period: periodOf(g), metrics: metricsOf(g), subtype: g.subtype || null, is_limit: isLimit(g), name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
   activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek, archived_week: g.archivedWeek || null,
   position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || []
 });
@@ -305,6 +321,9 @@ function entryFromRow(r) {
   return e;
 }
 
+// Liste des sports : la liste commune + les sports ajoutés par l'utilisateur (mine: true)
+const mergeSports = (common, mine) => [...(common || []).map(x => ({ name: x.name, kind: x.kind, mine: false })), ...(mine || []).map(x => ({ name: x.name, kind: x.kind, mine: true }))]
+  .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 function createSupabaseBackend() {
   if (!CFG.supabaseUrl || !CFG.supabaseKey || !window.supabase) return null;
   const storage = IS_APP ? {
@@ -370,11 +389,13 @@ function createSupabaseBackend() {
     // ----- données -----
     async loadAll(user) {
       const uid = user.id;
-      const [prow, goals, weeks, entries] = await Promise.all([
+      const [prow, goals, weeks, entries, sports, mySports] = await Promise.all([
         sb.from('profiles').select('*').eq('id', uid).maybeSingle().then(chk),
         fetchAll('goals', 'position'), fetchAll('weeks', 'week'), fetchAll('entries', 'at'),
+        sb.from('sports').select('name,kind').order('name').then(chk),
+        sb.from('user_sports').select('name,kind').order('name').then(chk),
       ]);
-      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {} };
+      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {}, sports: mergeSports(sports, mySports) };
       for (const w of weeks) out.weeks[w.week] = { week: w.week, closed: w.closed, result: w.result || undefined, recapSeen: w.recap_seen, entries: [] };
       for (const r of entries) {
         const w = out.weeks[r.week] || (out.weeks[r.week] = { week: r.week, closed: false, entries: [] });
@@ -384,6 +405,7 @@ function createSupabaseBackend() {
       return out;
     },
     async saveProfile(uid, p) { chk(await sb.from('profiles').update(profileToRow(p)).eq('id', uid)); },
+    async addUserSport(name, kind) { chk(await sb.from('user_sports').insert({ name, kind })); },
     async uploadAvatar(uid, blob) {
       const path = `${uid}/avatar-${Date.now()}.jpg`;
       chk(await sb.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true }));
@@ -453,7 +475,7 @@ async function loadData() {
   state.phase = 'loading'; state.loadErr = ''; render();
   try {
     const d = await backend.loadAll(state.user);
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || [] });
     state.phase = d.profile.startWeek ? 'app' : 'setup';
     if (state.phase === 'setup') state.legacy = await readLegacyData();
   } catch (e) {
@@ -468,7 +490,7 @@ async function reloadData(force) {
   try {
     const d = await backend.loadAll(state.user);
     if (!force && pendingWrites) return;
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || state.sports || [] });
     if (state.phase === 'offline') state.phase = d.profile.startWeek ? 'app' : 'setup';
     render(); maintenance();
   } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
@@ -590,15 +612,54 @@ async function authAction(kind) {
 }
 
 /* ============ goal logic ============ */
+/* ---- catégories et mesures ----
+ * Une résolution suit une ou plusieurs mesures (g.metrics) :
+ *   count (nombre de fois) · time (minutes) · distance (km) · pages · quantity (unité libre)
+ *   days (« chaque jour » : x jours par période) · once (à cocher) · limit (maximum à ne pas dépasser, catégorie Réduire)
+ * Elle est tenue quand TOUTES ses mesures atteignent leur objectif (ou, pour limit, ne le dépassent pas).
+ * Les objectifs chiffrés sont dans targetHistory[].targets ({ count: 3, time: 120, ... }).
+ */
 const TYPE_INFO = {
-  count: { label: 'Nombre de fois', sub: 'ex. 3 séances' },
-  quantity: { label: 'Quantité', sub: 'ex. 100 pages, 20 km' },
-  daily: { label: 'Chaque jour', sub: 'ex. 7 jours / 7' },
+  count: { label: 'Nombre de fois', sub: 'ex. 3 fois' },
+  quantity: { label: 'Quantité', sub: 'ex. 20 verres d\'eau' },
+  daily: { label: 'Chaque jour', sub: 'ex. 5 jours sur 7' },
   once: { label: 'Une fois', sub: 'à cocher' }
 };
+const CATS = {
+  reading:    { label: 'Lecture',    emoji: '📖', metrics: ['pages', 'time', 'count'], multi: true },
+  sport:      { label: 'Sport',      emoji: '💪', metrics: ['count', 'time', 'distance'], multi: true },
+  meditation: { label: 'Méditation', emoji: '🧘', metrics: ['time', 'count'], multi: false },
+  reduce:     { label: 'Réduire',    emoji: '🚭', metrics: ['limit'], multi: false },
+  other:      { label: 'Autre',      emoji: '✨' },
+};
+const SPORT_TYPES = { any: 'Peu importe', cardio: 'Cardio', muscu: 'Musculation' };
+const REDUCE_TYPES = {
+  alcohol:   { label: 'Alcool',    emoji: '🍷', unit: 'verres',     one: 'verre' },
+  cigarette: { label: 'Cigarette', emoji: '🚬', unit: 'cigarettes', one: 'cigarette' },
+};
+const METRIC_LABEL = { count: 'Nombre de fois', time: 'Temps', distance: 'Distance', pages: 'Pages', quantity: 'Quantité', days: 'Chaque jour', once: 'Une fois', limit: 'Maximum' };
+function metricsOf(g) {
+  if (Array.isArray(g.metrics) && g.metrics.length) return g.metrics;
+  if (g.type === 'quantity') return [g.cat === 'reading' ? 'pages' : 'quantity'];   // anciennes résolutions
+  if (g.type === 'daily') return ['days'];
+  if (g.type === 'once') return ['once'];
+  return ['count'];
+}
+const isLimit = g => !!g.isLimit || metricsOf(g)[0] === 'limit';
+function unitOf(g, m) {
+  if (m === 'time') return 'min';
+  if (m === 'distance') return 'km';
+  if (m === 'pages') return 'pages';
+  if (m === 'days') return 'jours';
+  if (m === 'once') return '';
+  if (m === 'limit') return (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).unit;
+  if (m === 'quantity') return g.unit || '';
+  if (g.cat === 'other') return g.unit || 'fois';
+  return g.cat === 'reading' ? 'lectures' : 'séances';
+}
 function defaultUnit(type, cat) {
-  if (type === 'quantity') return cat === 'reading' ? 'pages' : cat === 'sport' ? 'km' : 'min';
-  if (type === 'count') return cat === 'sport' ? 'séances' : 'fois';
+  if (type === 'quantity') return cat === 'reading' ? 'pages' : 'verres';
+  if (type === 'count') return 'fois';
   if (type === 'daily') return 'jours';
   return '';
 }
@@ -654,35 +715,55 @@ function entriesBetween(a, b) {
   return out;
 }
 
-function targetFor(g, key) {
+function targetsFor(g, key) {
+  const ms = metricsOf(g);
+  if (ms[0] === 'once') return { once: 1 };
   const h = (g.targetHistory || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
-  if (g.type === 'once') return 1;
-  if (!h.length) return g.target || 1;
-  let t = h[0].target;
-  for (const x of h) if (x.from <= key) t = x.target;
-  return t;
+  let e = h[0];
+  for (const x of h) if (x.from <= key) e = x;
+  const out = {};
+  for (const m of ms) {
+    if (e && e.targets && e.targets[m] != null) out[m] = e.targets[m];
+    else out[m] = m === ms[0] ? (e ? e.target : (g.target || 1)) : 1;
+  }
+  return out;
 }
+const targetFor = (g, key) => targetsFor(g, key)[metricsOf(g)[0]];
 const curTarget = g => targetFor(g, periodStart(periodOf(g)));
+const curTargets = g => targetsFor(g, periodStart(periodOf(g)));
 const isActive = (g, key) => g.createdWeek <= key && (!g.archivedWeek || key < g.archivedWeek);
 const isArchived = g => !!g.archivedWeek && periodStart(periodOf(g)) >= g.archivedWeek;
 const isInjured = (g, key) => (g.injuries || []).some(p => p.from <= key && (!p.to || key < p.to));
 const injuredNow = g => (g.injuries || []).some(p => !p.to);
-function doneFor(g, entries) {
-  const es = (entries || []).filter(e => e.goalId === g.id);
-  if (g.type === 'quantity') return es.reduce((s, e) => s + num(e.amount), 0);
-  if (g.type === 'daily') return new Set(es.map(e => e.date)).size;
-  if (g.type === 'once') return Math.min(es.length, 1);
-  return es.length;
+function measure(m, es) {
+  if (m === 'count') return es.length;
+  if (m === 'time') return es.reduce((s, e) => s + num(e.duration), 0);
+  if (m === 'distance') return es.reduce((s, e) => s + num(e.distance), 0);
+  if (m === 'days') return new Set(es.map(e => e.date)).size;
+  if (m === 'once') return Math.min(es.length, 1);
+  return es.reduce((s, e) => s + num(e.amount), 0);   // pages, quantity, limit
 }
-// Bilan d'une période : objectifs de cette période actifs à cette date, avec leur avancement
+function evalGoal(g, key, entries) {
+  const es = (entries || []).filter(e => e.goalId === g.id), t = targetsFor(g, key), lim = isLimit(g);
+  const metrics = metricsOf(g).map(m => ({ m, done: Math.round(measure(m, es) * 10) / 10, target: t[m], unit: unitOf(g, m) }));
+  return { metrics, ok: lim ? metrics.every(x => x.done <= x.target) : metrics.every(x => x.done >= x.target) };
+}
+const doneFor = (g, entries) => evalGoal(g, periodStart(periodOf(g)), entries).metrics[0].done;
+// Bilan d'une période : résolutions de cette période actives à cette date, avec leur avancement
 function computePeriod(p, start, entries) {
   const goals = goalsList().filter(g => periodOf(g) === p && isActive(g, start)).map(g => {
-    const target = targetFor(g, start), done = doneFor(g, entries);
-    const status = isInjured(g, start) ? 'injured' : done >= target ? 'ok' : 'ko';
-    return { id: g.id, name: g.name, emoji: g.emoji, unit: g.unit || '', type: g.type, target, done, status };
+    const ev = evalGoal(g, start, entries), first = ev.metrics[0];
+    const status = isInjured(g, start) ? 'injured' : ev.ok ? 'ok' : 'ko';
+    return { id: g.id, name: g.name, emoji: g.emoji, unit: first.unit, type: g.type, target: first.target, done: first.done, limit: isLimit(g), metrics: ev.metrics, status };
   });
   const counted = goals.filter(x => x.status !== 'injured');
   return { goals, validated: counted.length > 0 && counted.every(x => x.status === 'ok'), exempt: counted.length === 0 };
+}
+// Texte « 2 / 3 séances · 45 / 120 min » d'un résultat (bilans, historique)
+function resultText(x) {
+  const ms = x.metrics || [{ m: x.type === 'once' ? 'once' : 'n', done: x.done, target: x.target, unit: x.unit }];
+  return ms.map(y => y.m === 'once' ? (y.done ? 'fait' : 'pas fait')
+    : `${fmt(y.done)} / ${fmt(y.target)} ${esc(y.unit || '')}${y.m === 'limit' ? ' max' : ''}`.trim()).join(' · ');
 }
 const computeResult = (wk, doc) => computePeriod('week', wk, doc.entries);
 function periodResult(p, start) {
@@ -845,10 +926,28 @@ function viewSetup() {
   </div>`;
 }
 
-function goalMeta(g, done, target) {
-  const u = g.unit ? ' ' + esc(g.unit) : '';
-  if (g.type === 'once') return (done ? 'Fait ' : 'À faire ') + P[periodOf(g)].now;
-  return `<b>${fmt(done)}</b> / ${fmt(target)}${u}`;
+function goalMeta(g, r) {
+  const ms = r.metrics || [];
+  if (metricsOf(g)[0] === 'once') return (r.done ? 'Fait ' : 'À faire ') + P[periodOf(g)].now;
+  if (ms.length > 1) {   // plusieurs mesures : le détail est sur les barres
+    const sub = g.cat === 'sport' ? [g.subtype && g.subtype !== 'any' ? SPORT_TYPES[g.subtype] : '', (g.activities || []).slice(0, 3).join(', ')].filter(Boolean).join(' · ') : '';
+    if (g.cat === 'reading') { const b = lastBookOf(g.id); if (b) return '« ' + esc(b) + ' »'; }
+    return sub ? esc(sub) : '';
+  }
+  const x = ms[0];
+  if (x.m === 'limit') return `<b>${fmt(x.done)}</b> / ${fmt(x.target)} ${esc(x.unit)} max`;
+  return `<b>${fmt(x.done)}</b> / ${fmt(x.target)} ${esc(x.unit)}`;
+}
+function metricBars(r, dots) {
+  const ms = (r.metrics || []).filter(x => x.m !== 'once' && !(dots && x.m === 'days'));
+  if (!ms.length) return '';
+  const bar = x => {
+    const pct = Math.min(100, x.target ? x.done / x.target * 100 : (x.done ? 100 : 0));
+    const cls = x.m === 'limit' ? (x.done > x.target ? 'over' : 'lim') : x.done >= x.target ? 'full' : '';
+    return `<div class="bar ${ms.length > 1 ? 'sm' : ''} ${cls}"><i style="width:${pct}%"></i></div>`;
+  };
+  if (ms.length === 1) return bar(ms[0]);
+  return `<div class="mbars">` + ms.map(x => `<div class="mrow"><span>${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}</span>${bar(x)}</div>`).join('') + `</div>`;
 }
 let period = 'week';
 function viewResolutions() {
@@ -864,24 +963,25 @@ function viewResolutions() {
   const leftTxt = p === 'day' ? "Jusqu'à minuit" : left === 1 ? 'Dernier jour, fonce !' : `Encore ${left} jours`;
   h += `<div class="eyebrow">${P[p].eyebrow}</div><h1>${periodTitle(p, start)}</h1>`;
   h += `<div class="summary">${ring(counted.length ? ok / counted.length : 0)}<div><b>${ok} / ${counted.length}</b> <span class="muted">résolution${counted.length > 1 ? 's tenues' : ' tenue'}</span><div class="muted" style="font-size:13.5px">${leftTxt}</div></div></div>`;
-  if (res.validated) h += `<div class="validated-banner">🔥 ${P[p].validated}. Bien joué ${esc(state.profile.name)} !</div>`;
+  if (res.validated && res.goals.some(x => !x.limit)) h += `<div class="validated-banner">🔥 ${P[p].validated}. Bien joué ${esc(state.profile.name)} !</div>`;
   for (const g of goalsList().filter(g => periodOf(g) === p && isActive(g, start))) {
-    const r = res.goals.find(x => x.id === g.id);
-    const inj = r.status === 'injured', done = r.status === 'ok';
-    const pct = Math.min(100, r.target ? r.done / r.target * 100 : 0);
-    const dots = g.type === 'daily' && p === 'week';
-    const doneToday = g.type === 'daily' && entries.some(e => e.goalId === g.id && e.date === today);
+    const r = res.goals.find(x => x.id === g.id), ms = metricsOf(g), lim = isLimit(g);
+    const inj = r.status === 'injured', done = r.status === 'ok' && !lim;
+    const dailyOnly = ms.length === 1 && ms[0] === 'days';
+    const dots = dailyOnly && p === 'week';
+    const doneToday = dailyOnly && entries.some(e => e.goalId === g.id && e.date === today);
     let tags = '';
     if (inj) tags = `<span class="tag inj">🩹 Blessure · ne compte pas</span>`;
     else if (done) tags = `<span class="tag ok">Atteint</span>`;
+    else if (lim && r.status === 'ko') tags = `<span class="tag ko">Limite dépassée</span>`;
     let btn = '';
     if (!inj && !dots) {
-      if (g.type === 'daily') btn = `<button class="add ${doneToday ? 'is-done' : ''}" data-act="toggle-day" data-id="${g.id}" data-date="${today}" aria-label="Fait aujourd'hui">${doneToday ? ICON_CHECK : ICON_PLUS}</button>`;
-      else btn = `<button class="add ${done && g.type === 'once' ? 'is-done' : ''}" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && g.type === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
+      if (dailyOnly) btn = `<button class="add ${doneToday ? 'is-done' : ''}" data-act="toggle-day" data-id="${g.id}" data-date="${today}" aria-label="Fait aujourd'hui">${doneToday ? ICON_CHECK : ICON_PLUS}</button>`;
+      else btn = `<button class="add ${done && ms[0] === 'once' ? 'is-done' : ''} ${lim ? 'neutral' : ''}" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && ms[0] === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
     }
     h += `<div class="goal ${done ? 'done' : ''} ${inj ? 'injured' : ''}">
       <div class="g-top"><div class="emoji">${esc(g.emoji || '🎯')}</div>
-        <div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalMeta(g, r.done, r.target)}${g.type === 'daily' && !dots ? ` · ${doneToday ? "fait aujourd'hui" : "pas encore aujourd'hui"}` : ''}</div></div>
+        <div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalMeta(g, r)}${dailyOnly && !dots ? ` · ${doneToday ? "fait aujourd'hui" : "pas encore aujourd'hui"}` : ''}</div></div>
         ${tags && !btn ? tags : ''}${btn}
       </div>`;
     if (dots) {
@@ -890,12 +990,12 @@ function viewResolutions() {
         const dk = addDays(start, i), fut = dk > today;
         return `<button class="day ${set.has(dk) ? 'on' : ''} ${dk === today ? 'today' : ''}" ${fut || inj ? 'disabled' : ''} data-act="toggle-day" data-id="${g.id}" data-date="${dk}">${d}</button>`;
       }).join('') + `</div>`;
-    } else if (g.type !== 'once') h += `<div class="bar"><i style="width:${pct}%"></i></div>`;
+    } else h += metricBars(r, dots);
     if (tags && btn) h += `<div style="margin-top:10px">${tags}</div>`;
     h += `</div>`;
   }
   const ids = new Set(res.goals.map(x => x.id));
-  const journal = entries.filter(e => ids.has(e.goalId) && goalById(e.goalId).type !== 'daily')
+  const journal = entries.filter(e => ids.has(e.goalId) && metricsOf(goalById(e.goalId))[0] !== 'days')
     .sort((a, b) => a.date === b.date ? (b.at || 0) - (a.at || 0) : a.date < b.date ? 1 : -1);
   h += `<h2>${P[p].journal}</h2>`;
   if (!journal.length) h += `<div class="empty">Rien pour l'instant. Appuie sur <b style="color:var(--accent)">+</b> pour enregistrer une séance, une lecture…</div>`;
@@ -903,8 +1003,9 @@ function viewResolutions() {
   return h;
 }
 function entryDesc(e, g) {
-  const parts = [];
-  if (g.type === 'quantity') parts.push(`${fmt(e.amount)} ${g.unit || ''}`.trim());
+  const parts = [], ms = metricsOf(g);
+  if (ms.includes('pages') || ms.includes('quantity')) parts.push(`${fmt(e.amount)} ${ms.includes('pages') ? 'pages' : g.unit || ''}`.trim());
+  if (ms.includes('limit')) parts.push(`${fmt(e.amount)} ${e.amount > 1 ? unitOf(g, 'limit') : (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).one}`);
   if (e.activity) parts.push(e.activity);
   if (e.book) parts.push('« ' + e.book + ' »');
   if (e.duration) parts.push(fmt(e.duration) + ' min');
@@ -944,7 +1045,7 @@ function viewHistory() {
     h += `<details class="week-row"><summary><div class="wr-label">${periodTitle(p, k, true)}${sub}</div>${badge}</summary><div class="wr-detail">` +
       r.goals.map(x => {
         const ic = x.status === 'ok' ? '✓' : x.status === 'injured' ? '🩹' : '✗';
-        const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
+        const val = resultText(x);
         return `<div class="wr-goal"><span>${ic} ${esc(x.emoji || '')} ${esc(x.name)}</span><span>${val}</span></div>`;
       }).join('') + `</div></details>`;
   }
@@ -952,10 +1053,11 @@ function viewHistory() {
 }
 
 function goalLine(g) {
-  const t = curTarget(g), per = P[periodOf(g)].per;
-  if (g.type === 'once') return 'Une fois par ' + per;
-  if (g.type === 'daily') return `${t} jour${t > 1 ? 's' : ''} par ${per}`;
-  return `${fmt(t)} ${esc(g.unit || '')} par ${per}`;
+  const t = curTargets(g), per = P[periodOf(g)].per, ms = metricsOf(g);
+  if (ms[0] === 'once') return 'Une fois par ' + per;
+  if (ms[0] === 'days') return `${t.days} jour${t.days > 1 ? 's' : ''} par ${per}`;
+  if (ms[0] === 'limit') return `Max ${fmt(t.limit)} ${esc(unitOf(g, 'limit'))} par ${per}`;
+  return ms.map(m => `${fmt(t[m])} ${esc(unitOf(g, m))}`).join(' · ') + ' par ' + per;
 }
 function viewGoals() {
   const active = goalsList().filter(g => !isArchived(g)), archived = goalsList().filter(isArchived);
@@ -1034,6 +1136,11 @@ function lastBook() {
   for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) if (e.book && (!best || (e.at || 0) > (best.at || 0))) best = e;
   return best ? best.book : '';
 }
+function lastBookOf(goalId) {
+  let best = null;
+  for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) if (e.goalId === goalId && e.book && (!best || (e.at || 0) > (best.at || 0))) best = e;
+  return best ? best.book : '';
+}
 function allBooks() {
   const m = new Map();
   for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) if (e.book) m.set(e.book.trim().toLowerCase(), e.book.trim());
@@ -1041,7 +1148,7 @@ function allBooks() {
 }
 function openEntrySheet(id) {
   const g = goalById(id); if (!g) return;
-  if (g.type === 'once') {
+  if (metricsOf(g)[0] === 'once') {
     const st = periodStart(periodOf(g)), mine = entriesBetween(st, periodNext(periodOf(g), st)).filter(e => e.goalId === g.id);
     if (mine.length) { removeEntries(mine.map(e => e.id)); toast('Marqué comme pas fait'); return; }
   }
@@ -1053,12 +1160,21 @@ function renderEntrySheet() {
   const g = goalById(entryDraft.goalId), pStart = periodStart(periodOf(g));
   const acts = (g.activities || []).filter(Boolean);
   let h = `<div class="sh-title"><div class="emoji">${esc(g.emoji || '🎯')}</div><div class="t">${esc(g.name)}</div></div>`;
-  if (g.type === 'quantity') h += `<div class="field"><label>${esc(g.unit || 'Quantité')}</label><input class="inp big" id="en-amount" type="number" inputmode="decimal" min="0" placeholder="0"></div>`;
+  const ms = metricsOf(g);
+  if (ms.includes('pages') || ms.includes('quantity')) h += `<div class="field"><label>${ms.includes('pages') ? 'Pages lues' : esc(g.unit || 'Quantité')}</label><input class="inp big" id="en-amount" type="number" inputmode="decimal" min="0" placeholder="0"></div>`;
+  if (ms.includes('limit')) {
+    const rt = REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol;
+    h += `<div class="field"><label>Nombre de ${rt.unit}</label><div class="stepper"><button data-act="en-step" data-val="-1">−</button><input class="inp" id="en-amount" type="number" inputmode="numeric" min="1" value="1"><button data-act="en-step" data-val="1">+</button></div>
+      <div class="hint">Ton maximum : ${fmt(curTargets(g).limit)} ${rt.unit} par ${P[periodOf(g)].per}.</div></div>`;
+  }
   if (g.cat === 'reading') h += `<div class="field"><label>Livre</label><input class="inp" id="en-book" list="books" placeholder="Titre du livre" value="${esc(lastBook())}"><datalist id="books">${allBooks().map(b => `<option value="${esc(b)}">`).join('')}</datalist></div>`;
   if (acts.length) h += `<div class="field"><label>Activité</label><div class="chips">${acts.map(a => `<button class="chip ${entryDraft.activity === a ? 'on' : ''}" data-act="pick-act" data-val="${esc(a)}">${esc(a)}</button>`).join('')}</div></div>`;
-  if (g.cat === 'sport') {
-    h += `<div class="row"><div class="field"><label>Durée (min)</label><input class="inp" id="en-dur" type="number" inputmode="numeric" min="0" placeholder="Facultatif"></div>`;
-    if (g.distance) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Facultatif"></div>`;
+  const legacySport = g.cat === 'sport' && !Array.isArray(g.metrics);   // anciennes résolutions sport : durée / distance facultatives
+  const needTime = ms.includes('time'), needDist = ms.includes('distance');
+  if (needTime || needDist || legacySport) {
+    h += `<div class="row">`;
+    if (needTime || legacySport) h += `<div class="field"><label>Durée (min)</label><input class="inp" id="en-dur" type="number" inputmode="numeric" min="0" placeholder="${needTime ? '' : 'Facultatif'}"></div>`;
+    if (needDist || (legacySport && g.distance)) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${needDist ? '' : 'Facultatif'}"></div>`;
     h += `</div>`;
   }
   // jours possibles : les 7 derniers jours, sans sortir de la période en cours de l'objectif
@@ -1071,7 +1187,7 @@ function renderEntrySheet() {
   const keep = sheetOpen() ? readEntryInputs() : null;
   openSheet(h);
   if (keep) for (const [k, v] of Object.entries(keep)) { const el = $('#' + k); if (el) el.value = v; }
-  else if (g.type === 'quantity') setTimeout(() => { const el = $('#en-amount'); if (el) el.focus(); }, 280);
+  else if (ms.includes('pages') || ms.includes('quantity')) setTimeout(() => { const el = $('#en-amount'); if (el) el.focus(); }, 280);
 }
 function readEntryInputs() {
   const o = {}; ['en-amount', 'en-book', 'en-dur', 'en-dist', 'en-note'].forEach(k => { const el = $('#' + k); if (el) o[k] = el.value; }); return o;
@@ -1079,8 +1195,14 @@ function readEntryInputs() {
 function saveEntry() {
   const g = goalById(entryDraft.goalId), v = readEntryInputs();
   const e = { id: rid(), goalId: g.id, cat: g.cat || 'other', date: entryDraft.date, at: Date.now() };
-  if (g.type === 'quantity') { const a = num(v['en-amount']); if (a <= 0) { toast('Indique ' + (g.unit ? 'le nombre de ' + g.unit : 'une quantité')); return; } e.amount = a; }
-  else e.amount = 1;
+  const ms = metricsOf(g);
+  if (ms.includes('pages') || ms.includes('quantity') || ms.includes('limit')) {
+    const a = num(v['en-amount']);
+    if (a <= 0) { toast(ms.includes('pages') ? 'Indique le nombre de pages' : ms.includes('limit') ? 'Indique un nombre' : 'Indique ' + (g.unit ? 'le nombre de ' + g.unit : 'une quantité')); return; }
+    e.amount = a;
+  } else e.amount = g.cat === 'reading' ? 0 : 1;
+  if (ms.includes('time') && !(num(v['en-dur']) > 0)) { toast('Indique la durée (en minutes)'); return; }
+  if (ms.includes('distance') && !(num(v['en-dist']) > 0)) { toast('Indique la distance (en km)'); return; }
   if (v['en-book'] && v['en-book'].trim()) e.book = v['en-book'].trim().slice(0, 120);
   if (entryDraft.activity) e.activity = entryDraft.activity;
   if (num(v['en-dur']) > 0) e.duration = num(v['en-dur']);
@@ -1092,8 +1214,12 @@ function saveEntry() {
   doc.entries.push(e); doc.week = wk;
   closeSheet(); saveWeek(wk, doc);
   const after = computePeriod(p, st, entriesBetween(st, nx));
-  const ga = after.goals.find(x => x.id === g.id);
-  if (after.validated && before && before.status !== 'ok') toast('🔥 ' + P[p].validated + ' !');
+  const ga = after.goals.find(x => x.id === g.id) || { metrics: [{ done: 0, target: 0 }] };
+  if (isLimit(g)) {
+    const x = ga.metrics[0], left = x.target - x.done;
+    toast(left < 0 ? `⚠️ Limite dépassée (${fmt(x.done)} / ${fmt(x.target)})` : left === 0 ? 'Limite atteinte : on s\'arrête là 💪' : `Noté. Il t'en reste ${fmt(left)} au maximum`);
+  }
+  else if (after.validated && before && before.status !== 'ok') toast('🔥 ' + P[p].validated + ' !');
   else if (ga && ga.status === 'ok' && before && before.status !== 'ok') toast('✓ Objectif atteint !');
   else toast('Enregistré');
 }
@@ -1127,48 +1253,110 @@ function deleteEntry(id) {
 
 /* ---- goal editor ---- */
 let goalDraft = null, archiveConfirm = false;
-const EMOJIS = ['📖', '🏃', '🏊', '🏋️', '🚴', '🧘', '🥾', '⚽', '💧', '🥗', '😴', '🧠', '✍️', '🎸', '🗣️', '💰', '🚭', '📵', '🧹', '🎯'];
+const EMOJIS = ['📖', '🏃', '🏊', '🏋️', '🚴', '🧘', '🍷', '🚬', '🥾', '⚽', '💧', '🥗', '😴', '🧠', '✍️', '🎸', '🗣️', '💰', '🚭', '📵', '🧹', '🎯'];
+// Objectifs proposés par défaut selon la mesure et la période
+function defaultTarget(m, p) {
+  const T = {
+    count: { day: 1, week: 3, month: 12, year: 100 }, time: { day: 20, week: 120, month: 500, year: 5000 },
+    distance: { day: 5, week: 20, month: 80, year: 1000 }, pages: { day: 20, week: 100, month: 400, year: 5000 },
+    limit: { day: 2, week: 7, month: 20, year: 200 }, quantity: { day: 1, week: 7, month: 30, year: 365 },
+    days: { day: 1, week: 5, month: 20, year: 1 }, once: { day: 1, week: 1, month: 1, year: 1 },
+  };
+  return (T[m] || T.count)[p] || 1;
+}
+const CAT_DEFAULT_METRICS = { reading: ['pages'], sport: ['count'], meditation: ['time'], reduce: ['limit'] };
+let newSportOpen = false;
 function openGoalEditor(id) {
-  archiveConfirm = false;
-  if (id) goalDraft = Object.assign(clone(goalById(id)), { period: periodOf(goalById(id)), target: curTarget(goalById(id)), _new: false });
-  else goalDraft = { _new: true, period: period || 'week', name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', target: 3, activities: [], distance: false };
+  archiveConfirm = false; newSportOpen = false;
+  if (id) {
+    const g = goalById(id), ms = metricsOf(g);
+    goalDraft = Object.assign(clone(g), { _new: false, period: periodOf(g), metrics: ms.slice(), targets: Object.assign({}, curTargets(g)),
+      type: g.type || 'count', subtype: g.subtype || (g.cat === 'sport' ? 'any' : g.cat === 'reduce' ? 'alcohol' : null), activities: (g.activities || []).slice() });
+  } else {
+    goalDraft = { _new: true, period: period || 'week', name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', subtype: null,
+      metrics: ['count'], targets: {}, activities: [] };
+  }
   renderGoalEditor();
+}
+function draftTarget(m) {
+  const d = goalDraft;
+  if (d.targets[m] == null) d.targets[m] = defaultTarget(m, d.period);
+  return d.targets[m];
 }
 function readGoalForm() {
   const v = id => { const el = $('#' + id); return el ? el.value : null; };
-  if (v('ge-name') !== null) goalDraft.name = v('ge-name');
-  if (v('ge-emoji') !== null) goalDraft.emoji = v('ge-emoji');
-  if (v('ge-unit') !== null) goalDraft.unit = v('ge-unit');
-  if (v('ge-target') !== null) goalDraft.target = Math.max(1, num(v('ge-target')) || 1);
-  if (v('ge-acts') !== null) goalDraft.activities = v('ge-acts').split(',').map(s => s.trim()).filter(Boolean);
-  const d = $('#ge-dist'); if (d) goalDraft.distance = d.checked;
+  const d = goalDraft;
+  if (v('ge-name') !== null) d.name = v('ge-name');
+  if (v('ge-emoji') !== null) d.emoji = v('ge-emoji');
+  if (v('ge-unit') !== null) d.unit = v('ge-unit');
+  for (const m of Object.keys(METRIC_LABEL)) if (v('ge-t-' + m) !== null) d.targets[m] = num(v('ge-t-' + m));
+  if (v('ge-newsport') !== null) d.newSport = v('ge-newsport');
+}
+// mesures effectives du brouillon (catégorie Autre : déduites du type)
+function draftMetrics(d) {
+  if (d.cat === 'other') return [{ count: 'count', quantity: 'quantity', daily: 'days', once: 'once' }[d.type] || 'count'];
+  return d.metrics;
+}
+function sportsFor(sub) {
+  const all = state.sports || [];
+  return sub === 'cardio' || sub === 'muscu' ? all.filter(x => x.kind === sub) : all;
 }
 function renderGoalEditor() {
-  const d = goalDraft;
+  const d = goalDraft, per = P[d.period].per;
   let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvelle résolution' : 'Modifier la résolution'}</div></div>`;
-  h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="ex. Méditer" maxlength="40"></div>
-    <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
+  // 1. période
   h += d._new
     ? `<div class="field"><label>Période</label><div class="seg four">${PERIODS.map(p => `<button class="${d.period === p ? 'on' : ''}" data-act="seg" data-field="period" data-val="${p}">${P[p].tab}</button>`).join('')}</div>
        <div class="hint">${{ day: 'À tenir chaque jour, remis à zéro à minuit.', week: 'À tenir sur la semaine, remis à zéro le lundi.', month: 'À tenir sur le mois, remis à zéro le 1er.', year: "À tenir sur l'année, remis à zéro le 1er janvier." }[d.period]}</div></div>`
-    : `<div class="field"><label>Période</label><div class="hint" style="margin:0">${P[d.period].tab} (la période ne se change pas après la création)</div></div>`;
-  h += `<div class="field"><label>Catégorie</label><div class="seg three">${[['reading', '📖 Lecture'], ['sport', '💪 Sport'], ['other', '✨ Autre']].map(([k, l]) => `<button class="${d.cat === k ? 'on' : ''}" data-act="seg" data-field="cat" data-val="${k}">${l}</button>`).join('')}</div>
-    <div class="hint">${d.cat === 'reading' ? 'Tu pourras noter le livre à chaque fois, et les pages comptent dans tes totaux.' : d.cat === 'sport' ? 'Tu pourras noter l\'activité, la durée et la distance. Compte dans tes séances.' : 'Objectif libre.'}</div></div>`;
-  h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).filter(([k]) => k !== 'daily' || dailyMax(d.period)).map(([k, t]) => `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
-  if (d.type !== 'once') {
-    h += `<div class="field"><label>${d.type === 'daily' ? 'Jours par ' + P[d.period].per : 'Objectif par ' + P[d.period].per}</label><div class="stepper"><button data-act="step" data-val="-1">−</button><input class="inp" id="ge-target" type="number" inputmode="decimal" min="1" ${d.type === 'daily' ? `max="${dailyMax(d.period)}"` : ''} value="${d.target}"><button data-act="step" data-val="1">+</button></div></div>`;
-    if (d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="pages, séances, km…" maxlength="20"></div>`;
-  }
+    : `<div class="field"><label>Période et catégorie</label><div class="hint" style="margin:0">${P[d.period].tab} · ${CATS[d.cat] ? CATS[d.cat].label : 'Autre'} (elles ne se changent pas après la création)</div></div>`;
+  // 2. catégorie
+  if (d._new) h += `<div class="field"><label>Catégorie</label><div class="chips">${Object.entries(CATS).map(([k, c]) =>
+    `<button class="chip ${d.cat === k ? 'on' : ''}" data-act="ge-cat" data-val="${k}">${c.emoji} ${c.label}</button>`).join('')}</div></div>`;
+  // 3. nom
+  const ph = { reading: 'ex. Lire', sport: 'ex. Courir', meditation: 'ex. Méditer', reduce: d.subtype === 'cigarette' ? 'ex. Moins fumer' : "ex. Moins d'alcool", other: "ex. Boire de l'eau" }[d.cat] || '';
+  h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="${esc(ph)}" maxlength="40"></div>
+    <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
+  // 4. options propres à la catégorie
   if (d.cat === 'sport') {
-    h += `<div class="field"><label>Activités proposées</label><input class="inp" id="ge-acts" value="${esc((d.activities || []).join(', '))}" placeholder="ex. Course, Natation"><div class="hint">Sépare-les par des virgules. Laisse vide si tu n'en as pas besoin.</div></div>`;
-    h += `<div class="field"><label class="check" style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text)"><input type="checkbox" id="ge-dist" ${d.distance ? 'checked' : ''}> Noter la distance (km)</label></div>`;
+    h += `<div class="field"><label>Type de sport</label><div class="seg three">${Object.entries(SPORT_TYPES).map(([k, l]) =>
+      `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${l}</button>`).join('')}</div></div>`;
+    const list = sportsFor(d.subtype), names = new Set(list.map(x => x.name));
+    const extra = d.activities.filter(a => !names.has(a)).map(a => ({ name: a, mine: true }));
+    h += `<div class="field"><label>Sports proposés à la saisie</label><div class="chips multi small">${[...extra, ...list].map(x =>
+      `<button class="chip ${d.activities.includes(x.name) ? 'on' : ''} ${x.mine ? 'mine' : ''}" data-act="ge-sport" data-val="${esc(x.name)}">${esc(x.name)}</button>`).join('')}
+      <button class="chip" data-act="ge-new-sport">＋ Autre sport</button></div>
+      ${newSportOpen ? `<div class="row" style="margin-top:10px;gap:8px"><input class="inp" id="ge-newsport" placeholder="Nom du sport" maxlength="60" value="${esc(d.newSport || '')}"><button class="btn quiet" style="flex:0 0 110px;height:50px" data-act="ge-add-sport">Ajouter</button></div>
+      <div class="hint">Ce sport sera ajouté à ta liste personnelle (visible par toi seul).</div>` : `<div class="hint">Touche les sports que tu pratiques (facultatif). Tu les choisiras à chaque séance.</div>`}</div>`;
   }
+  if (d.cat === 'reduce') {
+    h += `<div class="field"><label>Quoi ?</label><div class="seg">${Object.entries(REDUCE_TYPES).map(([k, r]) =>
+      `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${r.emoji} ${r.label}</button>`).join('')}</div></div>`;
+  }
+  // 5. ce qui est mesuré
+  if (d.cat === 'other') {
+    h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).filter(([k]) => k !== 'daily' || dailyMax(d.period)).map(([k, t]) =>
+      `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
+  } else if (CATS[d.cat].metrics.length > 1) {
+    const c = CATS[d.cat];
+    h += `<div class="field"><label>Ce que tu suis${c.multi ? ' (un ou plusieurs)' : ''}</label><div class="${c.multi ? 'chips multi' : 'seg'}">${c.metrics.map(m =>
+      `<button class="${c.multi ? 'chip ' : ''}${d.metrics.includes(m) ? 'on' : ''}" data-act="ge-metric" data-val="${m}">${METRIC_LABEL[m]}</button>`).join('')}</div></div>`;
+  }
+  // 6. objectifs chiffrés
+  const ms = draftMetrics(d).filter(m => m !== 'once');
+  if (ms.length) {
+    const unitFor = m => d.cat === 'other' ? (m === 'days' ? 'jours' : d.unit || '…') : m === 'limit' ? (REDUCE_TYPES[d.subtype] || REDUCE_TYPES.alcohol).unit : unitOf({ cat: d.cat, subtype: d.subtype }, m);
+    h += `<div class="field"><label>${d.cat === 'reduce' ? 'Maximum par ' + per : 'Objectif par ' + per}</label>` + ms.map(m =>
+      `<div class="trow"><div class="tl">${esc(unitFor(m))}</div><div class="stepper"><button data-act="step" data-m="${m}" data-val="-1">−</button><input class="inp" id="ge-t-${m}" type="number" inputmode="decimal" min="${m === 'limit' ? 0 : 1}" ${m === 'days' ? `max="${dailyMax(d.period)}"` : ''} value="${draftTarget(m)}"><button data-act="step" data-m="${m}" data-val="1">+</button></div></div>`).join('') +
+      (d.cat === 'reduce' ? `<div class="hint">Résolution tenue tant que tu ne dépasses pas ce nombre. Mets 0 pour arrêter complètement.</div>` : '') + `</div>`;
+    if (d.cat === 'other' && d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
+  }
+  // 7. blessure / archivage
   if (!d._new) {
     const inj = injuredNow(goalById(d.id));
-    h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cet objectif ne compte pas dans tes bilans.' : 'L\'objectif ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
+    h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cette résolution ne compte pas dans tes bilans.' : 'La résolution ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
   }
   h += `<button class="btn" data-act="save-goal">${d._new ? 'Ajouter' : 'Enregistrer'}</button>`;
-  if (!d._new) h += `<button class="btn danger ${archiveConfirm ? 'confirm' : ''}" data-act="archive-goal" style="margin-top:8px">${archiveConfirm ? 'Confirmer l\'archivage' : 'Archiver l\'objectif'}</button>`;
+  if (!d._new) h += `<button class="btn danger ${archiveConfirm ? 'confirm' : ''}" data-act="archive-goal" style="margin-top:8px">${archiveConfirm ? 'Confirmer l\'archivage' : 'Archiver la résolution'}</button>`;
   const y = $('#sheet').scrollTop;
   openSheet(h); $('#sheet').scrollTop = y;
 }
@@ -1176,24 +1364,58 @@ const dailyMax = p => p === 'week' ? 7 : p === 'month' ? 31 : 0;   // « chaque 
 function saveGoal() {
   readGoalForm();
   const d = goalDraft, cur = periodStart(d.period);
-  if (!d.name.trim()) { toast('Donne un nom à ton objectif'); return; }
-  if (d.type === 'daily' && !dailyMax(d.period)) d.type = 'count';
-  let target = d.type === 'once' ? 1 : d.type === 'daily' ? Math.min(dailyMax(d.period), Math.max(1, Math.round(d.target))) : Math.max(1, d.target);
+  if (!d.name.trim()) { toast('Donne un nom à ta résolution'); return; }
+  if (d.cat === 'other' && d.type === 'daily' && !dailyMax(d.period)) d.type = 'count';
+  const ms = draftMetrics(d);
+  if (!ms.length) { toast('Choisis au moins une chose à suivre'); return; }
+  const targets = {};
+  for (const m of ms) {
+    let t = m === 'once' ? 1 : num(d.targets[m] != null ? d.targets[m] : defaultTarget(m, d.period));
+    if (m === 'days') t = Math.min(dailyMax(d.period), Math.max(1, Math.round(t)));
+    else if (m === 'limit') t = Math.max(0, Math.round(t));
+    else t = Math.max(m === 'time' || m === 'distance' ? 0.1 : 1, t);
+    targets[m] = t;
+  }
+  const type = ms[0] === 'once' ? 'once' : ms[0] === 'days' ? 'daily' : ['pages', 'quantity', 'limit'].includes(ms[0]) ? 'quantity' : 'count';
+  const fields = {
+    name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type, metrics: ms,
+    subtype: d.cat === 'sport' || d.cat === 'reduce' ? d.subtype : null, isLimit: d.cat === 'reduce',
+    unit: d.cat === 'other' ? (ms[0] === 'days' ? 'jours' : ms[0] === 'once' ? '' : (d.unit || '').trim()) : unitOf({ cat: d.cat, subtype: d.subtype, unit: '' }, ms[0]),
+    activities: d.cat === 'sport' ? d.activities : [], distance: ms.includes('distance'),
+  };
   const items = clone(goalsList());
-  const fields = { name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type: d.type, unit: d.type === 'daily' ? 'jours' : d.type === 'once' ? '' : (d.unit || '').trim(), activities: d.cat === 'sport' ? d.activities : [], distance: d.cat === 'sport' && !!d.distance };
   if (d._new) {
-    items.push(Object.assign({ id: rid(), period: d.period, createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target }] }, fields));
+    items.push(Object.assign({ id: rid(), period: d.period, createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: targets[ms[0]], targets }] }, fields));
     period = d.period;
   } else {
-    const g = items.find(x => x.id === d.id);
+    const g = items.find(x => x.id === d.id), key = periodStart(periodOf(g));
+    const changed = JSON.stringify(curTargets(g)) !== JSON.stringify(targets) || JSON.stringify(metricsOf(g)) !== JSON.stringify(ms);
     Object.assign(g, fields);
-    if (targetFor(g, cur) !== target || g.type === 'once') {
-      g.targetHistory = (g.targetHistory || []).filter(x => x.from !== cur);
-      g.targetHistory.push({ from: cur, target });
+    if (changed) {
+      g.targetHistory = (g.targetHistory || []).filter(x => x.from !== key);
+      g.targetHistory.push({ from: key, target: targets[ms[0]], targets });
       g.targetHistory.sort((a, b) => a.from < b.from ? -1 : 1);
     }
   }
   closeSheet(); saveGoals(items); toast(d._new ? 'Résolution ajoutée' : 'Résolution mise à jour');
+}
+async function addUserSport() {
+  readGoalForm();
+  const d = goalDraft, name = (d.newSport || '').trim().replace(/\s+/g, ' ');
+  if (!name) { toast('Indique le nom du sport'); return; }
+  const found = (state.sports || []).find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (found) {
+    if (!d.activities.includes(found.name)) d.activities.push(found.name);
+  } else {
+    const kind = d.subtype === 'cardio' || d.subtype === 'muscu' ? d.subtype : 'autre';
+    try { await backend.addUserSport(name, kind); }
+    catch (e) { toast('Ajout impossible : ' + errText(e)); return; }
+    state.sports = [...(state.sports || []), { name, kind, mine: true }].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    d.activities.push(name);
+    toast('Sport ajouté à ta liste');
+  }
+  d.newSport = ''; newSportOpen = false;
+  renderGoalEditor();
 }
 function toggleInjury() {
   readGoalForm();
@@ -1330,7 +1552,7 @@ function openRecap({ p, k }) {
     <div class="muted" style="margin-top:6px">${ex ? 'Prends soin de toi.' : ok ? `Série en cours : ${st.streak} ${unit[st.streak > 1 ? 1 : 0]} 🔥` : again + ' Faut le faire.'}</div></div>`;
   h += `<div class="card" style="margin-bottom:18px">` + r.goals.map(x => {
     const ic = x.status === 'ok' ? '<span class="tag ok">✓</span>' : x.status === 'injured' ? '<span class="tag inj">🩹</span>' : '<span class="tag ko">✗</span>';
-    const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
+    const val = resultText(x);
     return `<div class="entry"><div class="e-emoji">${esc(x.emoji || '')}</div><div class="e-main"><div class="e-title">${esc(x.name)}</div><div class="e-sub">${val}</div></div>${ic}</div>`;
   }).join('') + `</div><button class="btn" data-act="close-sheet">${recapQueue.length ? 'Bilan suivant' : cta}</button>`;
   openSheet(h);
@@ -1384,19 +1606,59 @@ const ACTIONS = {
     const f = el.dataset.field, v = el.dataset.val;
     if (goalDraft[f] === v) return;
     goalDraft[f] = v;
+    if (f === 'period') goalDraft.targets = {};   // objectifs proposés adaptés à la nouvelle période
     if (goalDraft.type === 'daily' && !dailyMax(goalDraft.period)) goalDraft.type = 'count';
-    goalDraft.unit = defaultUnit(goalDraft.type, goalDraft.cat);
-    if (goalDraft.type === 'daily' && goalDraft.target > dailyMax(goalDraft.period)) goalDraft.target = dailyMax(goalDraft.period);
-    if (f === 'cat' && v === 'reading' && goalDraft.type === 'count') { goalDraft.type = 'quantity'; goalDraft.unit = 'pages'; goalDraft.target = Math.max(goalDraft.target, 50); }
+    if (f === 'type') goalDraft.unit = defaultUnit(goalDraft.type, goalDraft.cat);
     renderGoalEditor();
   },
+  'ge-cat': el => {
+    readGoalForm();
+    const d = goalDraft, c = el.dataset.val;
+    if (d.cat === c) return;
+    d.cat = c; d.targets = {}; d.activities = [];
+    d.metrics = (CAT_DEFAULT_METRICS[c] || ['count']).slice();
+    d.subtype = c === 'sport' ? 'any' : c === 'reduce' ? 'alcohol' : null;
+    if (c === 'other') { d.type = 'count'; d.unit = 'fois'; }
+    if (!d.emoji || d.emoji === '🎯' || Object.values(CATS).some(x => x.emoji === d.emoji) || ['🍷', '🚬', '🏃', '🏋️'].includes(d.emoji))
+      d.emoji = c === 'reduce' ? REDUCE_TYPES.alcohol.emoji : c === 'other' ? '🎯' : CATS[c].emoji;
+    renderGoalEditor();
+  },
+  'ge-sub': el => {
+    readGoalForm();
+    const d = goalDraft; d.subtype = el.dataset.val;
+    if (d.cat === 'reduce') d.emoji = REDUCE_TYPES[d.subtype].emoji;
+    if (d.cat === 'sport') {
+      if (['💪', '🏃', '🏋️'].includes(d.emoji)) d.emoji = { any: '💪', cardio: '🏃', muscu: '🏋️' }[d.subtype];
+      const ok = new Set(sportsFor(d.subtype).map(x => x.name));
+      d.activities = d.activities.filter(a => ok.has(a) || !(state.sports || []).some(x => x.name === a));
+    }
+    renderGoalEditor();
+  },
+  'ge-metric': el => {
+    readGoalForm();
+    const d = goalDraft, m = el.dataset.val, c = CATS[d.cat];
+    if (!c.multi) d.metrics = [m];
+    else if (d.metrics.includes(m)) { if (d.metrics.length > 1) d.metrics = d.metrics.filter(x => x !== m); else toast('Garde au moins une mesure'); }
+    else d.metrics = c.metrics.filter(x => x === m || d.metrics.includes(x));
+    renderGoalEditor();
+  },
+  'ge-sport': el => {
+    readGoalForm();
+    const d = goalDraft, n = el.dataset.val;
+    d.activities = d.activities.includes(n) ? d.activities.filter(x => x !== n) : [...d.activities, n];
+    renderGoalEditor();
+  },
+  'ge-new-sport': () => { readGoalForm(); newSportOpen = !newSportOpen; renderGoalEditor(); if (newSportOpen) setTimeout(() => { const el = $('#ge-newsport'); if (el) el.focus(); }, 50); },
+  'ge-add-sport': () => addUserSport(),
   'step': el => {
     readGoalForm();
-    const t = goalDraft.target, inc = +el.dataset.val * (t >= 50 ? 10 : 1);
-    goalDraft.target = Math.max(1, t + inc);
-    if (goalDraft.type === 'daily') goalDraft.target = Math.min(dailyMax(goalDraft.period), goalDraft.target);
-    $('#ge-target').value = goalDraft.target;
+    const m = el.dataset.m, d = goalDraft, t = num(d.targets[m] != null ? d.targets[m] : defaultTarget(m, d.period));
+    const inc = +el.dataset.val * (t >= 200 ? 50 : t >= 50 ? 10 : t >= 20 && m !== 'limit' ? 5 : 1);
+    let v = Math.max(m === 'limit' ? 0 : 1, t + inc);
+    if (m === 'days') v = Math.min(dailyMax(d.period), v);
+    d.targets[m] = v; $('#ge-t-' + m).value = v;
   },
+  'en-step': el => { const i = $('#en-amount'); i.value = Math.max(1, num(i.value) + +el.dataset.val); },
   'toggle-injury': () => toggleInjury(),
   'archive-goal': () => archiveGoal(),
   'save-goal': () => saveGoal(),

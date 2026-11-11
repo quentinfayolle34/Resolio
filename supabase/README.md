@@ -16,6 +16,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 1. Supabase → ton projet → **SQL Editor** → **New query**.
 2. Copie tout le contenu de `migrations/20261111200000_resolio_init.sql`, colle-le, clique sur **Run**.
 3. Nouvelle requête : fais pareil avec `migrations/20261111220000_resolio_periods.sql` (résolutions jour / semaine / mois / année + bilans).
+4. Nouvelle requête : fais pareil avec `migrations/20261111230000_resolio_categories.sql` (catégories Méditation / Réduire, mesures multiples, liste des sports).
 3. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** le bucket `avatars`.
 
 | Table | Contenu |
@@ -23,7 +24,9 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 | `profiles` | Prénom, nom, photo, date de naissance, ville, semaine de départ, derniers bilans vus (1 ligne par compte, créée automatiquement) |
 | `goals` | Résolutions : période (jour / semaine / mois / année), nom, emoji, catégorie, type, unité, historique des chiffres, pauses blessure, archivage |
 | `weeks` | Une ligne par semaine : clôturée, bilan des résolutions hebdomadaires |
-| `entries` | Chaque séance / lecture / jour coché |
+| `entries` | Chaque séance / lecture / méditation / verre… |
+| `sports` | Liste commune des sports (lecture seule) |
+| `user_sports` | Sports ajoutés par un utilisateur (visibles par lui seul) |
 
 Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Les photos sont rangées dans `avatars/<id utilisateur>/`.
 
