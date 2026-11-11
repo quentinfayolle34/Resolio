@@ -1,0 +1,15 @@
+# Lancer :  docker compose up -d --build     (depuis le dossier server/)
+# Arrêter : docker compose down
+services:
+  pocketbase:
+    build: .
+    image: resolio-pocketbase
+    container_name: resolio-pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      # Toutes les données (base, fichiers, sauvegardes) : c'est CE dossier qu'il faut sauvegarder / déménager.
+      - ./pb_data:/pb/pb_data
+      # Monté pour que les changements de schéma faits dans l'interface admin soient enregistrés dans Git.
+      - ./pb_migrations:/pb/pb_migrations
