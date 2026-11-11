@@ -5,7 +5,7 @@
 Resolio est une application mobile de résolutions **par jour, semaine, mois ou année** : boire 2 L d'eau par jour, lire 100 pages et faire 3 séances de sport par semaine, lire 400 pages par mois… À la fin de chaque période (minuit, dimanche minuit, fin du mois, 31 décembre), un bilan indique si elle est validée.
 
 - **Résolutions** : onglets Jour / Semaine / Mois / Année (seuls ceux qui ont des résolutions s'affichent), progression, journal des séances et lectures (livre, activité, durée, distance).
-- **Objectifs** : nouvelle résolution (période ; catégorie Lecture, Sport, Méditation, Réduire ou Autre ; une ou plusieurs mesures : nombre de fois, temps, distance, pages ; maximum à ne pas dépasser pour Réduire), modifier les chiffres, pause blessure, archivage.
+- **Objectifs** : nouvelle résolution (période ; catégorie Lecture, Sport, Méditation, Réduire ou Autre ; une ou plusieurs mesures : nombre de fois, temps, distance, pages ; maximum à ne pas dépasser pour Réduire ; **Temps d'écran** relevé automatiquement sur Android : tout le téléphone, catégories ou applications), modifier les chiffres, pause blessure, archivage.
 - **Historique** : chaque jour / semaine / mois / année passé, validé ou non, séries et records.
 - **Profil** : nom, prénom, photo, email, date de naissance et ville (facultatifs), séries, totaux, badges.
 - **Compte** : connexion par email + mot de passe ou avec Google, mot de passe oublié, suppression du compte.

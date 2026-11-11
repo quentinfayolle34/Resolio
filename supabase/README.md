@@ -17,6 +17,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 2. Copie tout le contenu de `migrations/20261111200000_resolio_init.sql`, colle-le, clique sur **Run**.
 3. Nouvelle requête : fais pareil avec `migrations/20261111220000_resolio_periods.sql` (résolutions jour / semaine / mois / année + bilans).
 4. Nouvelle requête : fais pareil avec `migrations/20261111230000_resolio_categories.sql` (catégories Méditation / Réduire, mesures multiples, liste des sports).
+5. Nouvelle requête : fais pareil avec `migrations/20261111240000_resolio_screen_time.sql` (temps d'écran).
 3. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** le bucket `avatars`.
 
 | Table | Contenu |
@@ -27,6 +28,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 | `entries` | Chaque séance / lecture / méditation / verre… |
 | `sports` | Liste commune des sports (lecture seule) |
 | `user_sports` | Sports ajoutés par un utilisateur (visibles par lui seul) |
+| `screen_time` | Temps d'écran par application et par jour (minutes), envoyé par l'app Android |
 
 Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Les photos sont rangées dans `avatars/<id utilisateur>/`.
 

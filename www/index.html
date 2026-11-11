@@ -65,6 +65,7 @@ h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 1
 .chips.multi .chip.on{background:var(--accent);color:var(--accent-ink)}
 .chips.small .chip{height:34px;font-size:13px;padding:0 11px}
 .chip.mine{border:1px dashed var(--dim)}
+.screen-sub{margin-top:10px;font-size:13px;color:var(--muted)}
 .trow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .trow .tl{flex:1;font-weight:600;font-size:14px}
 .trow .stepper{flex:0 0 190px}
@@ -395,7 +396,14 @@ function createSupabaseBackend() {
         sb.from('sports').select('name,kind').order('name').then(chk),
         sb.from('user_sports').select('name,kind').order('name').then(chk),
       ]);
-      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {}, sports: mergeSports(sports, mySports) };
+      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {}, sports: mergeSports(sports, mySports), screen: {} };
+      // temps d'écran des 400 derniers jours
+      const since = addDays(todayKey(), -400);
+      for (let from = 0; ; from += 1000) {
+        const rows = chk(await sb.from('screen_time').select('date,package,app_name,category,minutes').gte('date', since).order('date').range(from, from + 999));
+        for (const r of rows) (out.screen[r.date] || (out.screen[r.date] = [])).push({ package: r.package, name: r.app_name || r.package, category: r.category || 'other', minutes: num(r.minutes) });
+        if (rows.length < 1000) break;
+      }
       for (const w of weeks) out.weeks[w.week] = { week: w.week, closed: w.closed, result: w.result || undefined, recapSeen: w.recap_seen, entries: [] };
       for (const r of entries) {
         const w = out.weeks[r.week] || (out.weeks[r.week] = { week: r.week, closed: false, entries: [] });
@@ -405,6 +413,7 @@ function createSupabaseBackend() {
       return out;
     },
     async saveProfile(uid, p) { chk(await sb.from('profiles').update(profileToRow(p)).eq('id', uid)); },
+    async upsertScreenTime(rows) { for (const c of chunks(rows)) chk(await sb.from('screen_time').upsert(c, { onConflict: 'user_id,date,package' })); },
     async addUserSport(name, kind) { chk(await sb.from('user_sports').insert({ name, kind })); },
     async uploadAvatar(uid, blob) {
       const path = `${uid}/avatar-${Date.now()}.jpg`;
@@ -429,7 +438,7 @@ function createSupabaseBackend() {
 
 /* ============ state ============ */
 // phase : 'loading' | 'config' (Supabase non configuré) | 'auth' (pas connecté) | 'offline' | 'setup' (compte sans objectifs) | 'app'
-const state = { phase: 'loading', user: null, profile: null, goals: null, weeks: {}, loadErr: '', legacy: null };
+const state = { phase: 'loading', user: null, profile: null, goals: null, weeks: {}, screen: {}, screenPerm: null, sports: [], loadErr: '', legacy: null };
 let backend = null;
 const TABS = ['resolutions', 'historique', 'objectifs', 'profil'];
 let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'resolutions';
@@ -475,8 +484,9 @@ async function loadData() {
   state.phase = 'loading'; state.loadErr = ''; render();
   try {
     const d = await backend.loadAll(state.user);
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || [] });
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || [], screen: d.screen || {} });
     state.phase = d.profile.startWeek ? 'app' : 'setup';
+    if (state.phase === 'app') await withTimeout(syncScreenTime(), 8000);   // avant les bilans : le temps d'écran d'hier doit être à jour
     if (state.phase === 'setup') state.legacy = await readLegacyData();
   } catch (e) {
     console.error(e);
@@ -490,7 +500,8 @@ async function reloadData(force) {
   try {
     const d = await backend.loadAll(state.user);
     if (!force && pendingWrites) return;
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || state.sports || [] });
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || state.sports || [], screen: Object.assign({}, d.screen || {}, state.screen || {}) });
+    await withTimeout(syncScreenTime(), 8000);
     if (state.phase === 'offline') state.phase = d.profile.startWeek ? 'app' : 'setup';
     render(); maintenance();
   } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
@@ -520,6 +531,38 @@ function errText(e) {
   if (code === 'same_password') return 'Choisis un mot de passe différent de l\'ancien.';
   if (/failed to fetch|network|load failed/i.test(msg) || navigator.onLine === false) return 'Pas de connexion internet.';
   return msg || 'Une erreur est survenue.';
+}
+
+/* ---- temps d'écran : lu sur le téléphone (module Android ScreenTime), enregistré dans la base ---- */
+const screenPlugin = () => window.__SCREEN_TIME_TEST__ || (IS_APP ? plugin('ScreenTime') : null);
+const hasScreenGoals = () => goalsList().some(g => g.cat === 'screen' && !isArchived(g));
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+let screenSyncing = null;
+function syncScreenTime(force) {
+  if (screenSyncing) return screenSyncing;
+  screenSyncing = (async () => {
+    const sp = screenPlugin();
+    if (!sp || !state.user || (!force && !hasScreenGoals())) return;
+    try {
+      const { granted } = await sp.hasPermission();
+      state.screenPerm = !!granted;
+      if (!granted) return;
+      // jours à relire : depuis le dernier jour connu (au moins 2 : hier peut avoir changé), 31 au premier passage
+      const known = Object.keys(state.screen || {}).filter(d => (state.screen[d] || []).length).sort();
+      const last = known[known.length - 1];
+      const days = last ? Math.min(31, Math.max(2, Math.round((pkey(todayKey()) - pkey(last)) / 864e5) + 1)) : 31;
+      const r = await sp.getDailyUsage({ days });
+      const rows = [], u = uid();
+      state.screen = state.screen || {};
+      for (const d of (r.days || [])) {
+        if (!d.apps.length && (state.screen[d.date] || []).length) continue;   // le téléphone a oublié ce jour : on garde ce qu'on avait
+        state.screen[d.date] = d.apps.map(a => ({ package: a.package, name: a.name, category: a.category || 'other', minutes: num(a.minutes) }));
+        for (const a of d.apps) rows.push({ user_id: u, date: d.date, package: a.package, app_name: a.name, category: a.category || 'other', minutes: Math.min(1440, num(a.minutes)) });
+      }
+      if (rows.length) await write(() => backend.upsertScreenTime(rows));
+    } catch (e) { console.error('temps d\'écran', e); }
+  })().finally(() => { screenSyncing = null; });
+  return screenSyncing;
 }
 
 /* ---- import d'une sauvegarde / des données de l'ancienne version dans le compte ---- */
@@ -630,9 +673,12 @@ const CATS = {
   sport:      { label: 'Sport',      emoji: '💪', metrics: ['count', 'time', 'distance'], multi: true },
   meditation: { label: 'Méditation', emoji: '🧘', metrics: ['time', 'count'], multi: false },
   reduce:     { label: 'Réduire',    emoji: '🚭', metrics: ['limit'], multi: false },
+  screen:     { label: "Temps d'écran", emoji: '📱', metrics: ['limit'], multi: false },
   other:      { label: 'Autre',      emoji: '✨' },
 };
 const SPORT_TYPES = { any: 'Peu importe', cardio: 'Cardio', muscu: 'Musculation' };
+const SCREEN_TYPES = { total: 'Tout le téléphone', categories: 'Catégories', apps: 'Applications' };
+const APP_CATS = { social: 'Réseaux sociaux', video: 'Vidéo', game: 'Jeux', audio: 'Musique & audio', news: 'Actualités', image: 'Photos', productivity: 'Productivité', maps: 'Cartes', accessibility: 'Accessibilité', other: 'Autres' };
 const REDUCE_TYPES = {
   alcohol:   { label: 'Alcool',    emoji: '🍷', unit: 'verres',     one: 'verre' },
   cigarette: { label: 'Cigarette', emoji: '🚬', unit: 'cigarettes', one: 'cigarette' },
@@ -652,11 +698,15 @@ function unitOf(g, m) {
   if (m === 'pages') return 'pages';
   if (m === 'days') return 'jours';
   if (m === 'once') return '';
-  if (m === 'limit') return (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).unit;
+  if (m === 'limit') return g.cat === 'screen' ? 'min' : (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).unit;
   if (m === 'quantity') return g.unit || '';
   if (g.cat === 'other') return g.unit || 'fois';
   return g.cat === 'reading' ? 'lectures' : 'séances';
 }
+// Durées lisibles : 72 min → « 1 h 12 »
+const hm = v => { v = Math.round(v); return v >= 60 ? `${Math.floor(v / 60)} h${v % 60 ? ' ' + pad(v % 60) : ''}` : `${v} min`; };
+const fmtPair = (done, target, unit) => unit === 'min' && (done >= 60 || target >= 60) ? `${hm(done)} / ${hm(target)}` : `${fmt(done)} / ${fmt(target)} ${unit || ''}`.trim();
+const fmtAmount = (v, unit) => unit === 'min' && v >= 60 ? hm(v) : `${fmt(v)} ${unit || ''}`.trim();
 function defaultUnit(type, cat) {
   if (type === 'quantity') return cat === 'reading' ? 'pages' : 'verres';
   if (type === 'count') return 'fois';
@@ -743,9 +793,27 @@ function measure(m, es) {
   if (m === 'once') return Math.min(es.length, 1);
   return es.reduce((s, e) => s + num(e.amount), 0);   // pages, quantity, limit
 }
+// Temps d'écran (minutes) d'une résolution sur [a, b[ : tout le téléphone, des catégories ou des applis choisies
+function screenAppsMatch(g) {
+  const sel = new Set(g.activities || []);
+  if (g.subtype === 'categories') return app => sel.has(app.category || 'other');
+  if (g.subtype === 'apps') return app => sel.has(app.package);
+  return () => true;
+}
+function screenMinutes(g, a, b) {
+  const ok = screenAppsMatch(g); let total = 0;
+  for (const [d, apps] of Object.entries(state.screen || {})) if (d >= a && d < b) for (const x of apps) if (ok(x)) total += num(x.minutes);
+  return Math.round(total);
+}
+function screenTopApps(g, a, b, n = 3) {
+  const ok = screenAppsMatch(g), by = {};
+  for (const [d, apps] of Object.entries(state.screen || {})) if (d >= a && d < b) for (const x of apps) if (ok(x)) by[x.name || x.package] = (by[x.name || x.package] || 0) + num(x.minutes);
+  return Object.entries(by).sort((x, y) => y[1] - x[1]).slice(0, n);
+}
 function evalGoal(g, key, entries) {
   const es = (entries || []).filter(e => e.goalId === g.id), t = targetsFor(g, key), lim = isLimit(g);
-  const metrics = metricsOf(g).map(m => ({ m, done: Math.round(measure(m, es) * 10) / 10, target: t[m], unit: unitOf(g, m) }));
+  const screenEnd = g.cat === 'screen' ? periodNext(periodOf(g), key) : null;
+  const metrics = metricsOf(g).map(m => ({ m, done: g.cat === 'screen' ? screenMinutes(g, key, screenEnd) : Math.round(measure(m, es) * 10) / 10, target: t[m], unit: unitOf(g, m) }));
   return { metrics, ok: lim ? metrics.every(x => x.done <= x.target) : metrics.every(x => x.done >= x.target) };
 }
 const doneFor = (g, entries) => evalGoal(g, periodStart(periodOf(g)), entries).metrics[0].done;
@@ -763,7 +831,7 @@ function computePeriod(p, start, entries) {
 function resultText(x) {
   const ms = x.metrics || [{ m: x.type === 'once' ? 'once' : 'n', done: x.done, target: x.target, unit: x.unit }];
   return ms.map(y => y.m === 'once' ? (y.done ? 'fait' : 'pas fait')
-    : `${fmt(y.done)} / ${fmt(y.target)} ${esc(y.unit || '')}${y.m === 'limit' ? ' max' : ''}`.trim()).join(' · ');
+    : esc(fmtPair(y.done, y.target, y.unit)) + (y.m === 'limit' ? ' max' : '')).join(' · ');
 }
 const computeResult = (wk, doc) => computePeriod('week', wk, doc.entries);
 function periodResult(p, start) {
@@ -935,8 +1003,8 @@ function goalMeta(g, r) {
     return sub ? esc(sub) : '';
   }
   const x = ms[0];
-  if (x.m === 'limit') return `<b>${fmt(x.done)}</b> / ${fmt(x.target)} ${esc(x.unit)} max`;
-  return `<b>${fmt(x.done)}</b> / ${fmt(x.target)} ${esc(x.unit)}`;
+  const [a, b] = fmtPair(x.done, x.target, x.unit).split(' / ');
+  return `<b>${esc(a)}</b> / ${esc(b)}${x.m === 'limit' ? ' max' : ''}`;
 }
 function metricBars(r, dots) {
   const ms = (r.metrics || []).filter(x => x.m !== 'once' && !(dots && x.m === 'days'));
@@ -947,7 +1015,7 @@ function metricBars(r, dots) {
     return `<div class="bar ${ms.length > 1 ? 'sm' : ''} ${cls}"><i style="width:${pct}%"></i></div>`;
   };
   if (ms.length === 1) return bar(ms[0]);
-  return `<div class="mbars">` + ms.map(x => `<div class="mrow"><span>${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}</span>${bar(x)}</div>`).join('') + `</div>`;
+  return `<div class="mbars">` + ms.map(x => `<div class="mrow"><span>${esc(fmtPair(x.done, x.target, x.unit))}</span>${bar(x)}</div>`).join('') + `</div>`;
 }
 let period = 'week';
 function viewResolutions() {
@@ -974,8 +1042,13 @@ function viewResolutions() {
     if (inj) tags = `<span class="tag inj">🩹 Blessure · ne compte pas</span>`;
     else if (done) tags = `<span class="tag ok">Atteint</span>`;
     else if (lim && r.status === 'ko') tags = `<span class="tag ko">Limite dépassée</span>`;
-    let btn = '';
-    if (!inj && !dots) {
+    let btn = '', extra = '';
+    if (g.cat === 'screen') {
+      const top = screenTopApps(g, start, next);
+      extra = `<div class="screen-sub">${top.length ? top.map(([n, m]) => `${esc(n)} ${hm(m)}`).join(' · ') : 'Aucune utilisation enregistrée pour l’instant'}</div>`;
+      if (!screenPlugin()) extra += `<div class="hint">Le temps d'écran se lit dans l'application Android.</div>`;
+      else if (state.screenPerm === false) extra += `<button class="btn quiet" style="height:44px;margin-top:10px;font-size:14px" data-act="screen-perm">Autoriser l'accès au temps d'écran</button>`;
+    } else if (!inj && !dots) {
       if (dailyOnly) btn = `<button class="add ${doneToday ? 'is-done' : ''}" data-act="toggle-day" data-id="${g.id}" data-date="${today}" aria-label="Fait aujourd'hui">${doneToday ? ICON_CHECK : ICON_PLUS}</button>`;
       else btn = `<button class="add ${done && ms[0] === 'once' ? 'is-done' : ''} ${lim ? 'neutral' : ''}" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && ms[0] === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
     }
@@ -991,6 +1064,7 @@ function viewResolutions() {
         return `<button class="day ${set.has(dk) ? 'on' : ''} ${dk === today ? 'today' : ''}" ${fut || inj ? 'disabled' : ''} data-act="toggle-day" data-id="${g.id}" data-date="${dk}">${d}</button>`;
       }).join('') + `</div>`;
     } else h += metricBars(r, dots);
+    h += extra;
     if (tags && btn) h += `<div style="margin-top:10px">${tags}</div>`;
     h += `</div>`;
   }
@@ -1052,12 +1126,23 @@ function viewHistory() {
   return h;
 }
 
+function screenScope(g) {
+  const sel = g.activities || [];
+  if (g.subtype === 'categories') return sel.map(c => APP_CATS[c] || c).join(', ') || 'catégories';
+  if (g.subtype === 'apps') {
+    const names = {};
+    for (const apps of Object.values(state.screen || {})) for (const x of apps) names[x.package] = x.name;
+    return sel.map(p => names[p] || p.split('.').pop()).join(', ') || 'applications';
+  }
+  return 'tout le téléphone';
+}
 function goalLine(g) {
   const t = curTargets(g), per = P[periodOf(g)].per, ms = metricsOf(g);
   if (ms[0] === 'once') return 'Une fois par ' + per;
   if (ms[0] === 'days') return `${t.days} jour${t.days > 1 ? 's' : ''} par ${per}`;
+  if (g.cat === 'screen') return `Max ${hm(t.limit)} par ${per} · ${esc(screenScope(g))}`;
   if (ms[0] === 'limit') return `Max ${fmt(t.limit)} ${esc(unitOf(g, 'limit'))} par ${per}`;
-  return ms.map(m => `${fmt(t[m])} ${esc(unitOf(g, m))}`).join(' · ') + ' par ' + per;
+  return ms.map(m => esc(fmtAmount(t[m], unitOf(g, m)))).join(' · ') + ' par ' + per;
 }
 function viewGoals() {
   const active = goalsList().filter(g => !isArchived(g)), archived = goalsList().filter(isArchived);
@@ -1147,7 +1232,7 @@ function allBooks() {
   return [...m.values()];
 }
 function openEntrySheet(id) {
-  const g = goalById(id); if (!g) return;
+  const g = goalById(id); if (!g || g.cat === 'screen') return;
   if (metricsOf(g)[0] === 'once') {
     const st = periodStart(periodOf(g)), mine = entriesBetween(st, periodNext(periodOf(g), st)).filter(e => e.goalId === g.id);
     if (mine.length) { removeEntries(mine.map(e => e.id)); toast('Marqué comme pas fait'); return; }
@@ -1264,7 +1349,7 @@ function defaultTarget(m, p) {
   };
   return (T[m] || T.count)[p] || 1;
 }
-const CAT_DEFAULT_METRICS = { reading: ['pages'], sport: ['count'], meditation: ['time'], reduce: ['limit'] };
+const CAT_DEFAULT_METRICS = { reading: ['pages'], sport: ['count'], meditation: ['time'], reduce: ['limit'], screen: ['limit'] };
 let newSportOpen = false;
 function openGoalEditor(id) {
   archiveConfirm = false; newSportOpen = false;
@@ -1278,9 +1363,10 @@ function openGoalEditor(id) {
   }
   renderGoalEditor();
 }
+const SCREEN_DEFAULT = { day: 120, week: 840, month: 3600, year: 40000 };   // minutes
 function draftTarget(m) {
   const d = goalDraft;
-  if (d.targets[m] == null) d.targets[m] = defaultTarget(m, d.period);
+  if (d.targets[m] == null) d.targets[m] = d.cat === 'screen' ? SCREEN_DEFAULT[d.period] : defaultTarget(m, d.period);
   return d.targets[m];
 }
 function readGoalForm() {
@@ -1328,6 +1414,22 @@ function renderGoalEditor() {
       ${newSportOpen ? `<div class="row" style="margin-top:10px;gap:8px"><input class="inp" id="ge-newsport" placeholder="Nom du sport" maxlength="60" value="${esc(d.newSport || '')}"><button class="btn quiet" style="flex:0 0 110px;height:50px" data-act="ge-add-sport">Ajouter</button></div>
       <div class="hint">Ce sport sera ajouté à ta liste personnelle (visible par toi seul).</div>` : `<div class="hint">Touche les sports que tu pratiques (facultatif). Tu les choisiras à chaque séance.</div>`}</div>`;
   }
+  if (d.cat === 'screen') {
+    h += `<div class="field"><label>Quoi ?</label><div class="seg three">${Object.entries(SCREEN_TYPES).map(([k, l]) =>
+      `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${l}</button>`).join('')}</div></div>`;
+    if (d.subtype === 'categories') {
+      h += `<div class="field"><label>Catégories d'applications</label><div class="chips multi small">${Object.entries(APP_CATS).map(([k, l]) =>
+        `<button class="chip ${d.activities.includes(k) ? 'on' : ''}" data-act="ge-pick" data-val="${k}">${l}</button>`).join('')}</div>
+        <div class="hint">Catégories déclarées par les applications elles-mêmes : certaines n'en ont pas et sont dans « Autres ».</div></div>`;
+    }
+    if (d.subtype === 'apps') {
+      const apps = knownApps();
+      h += `<div class="field"><label>Applications</label>` + (apps.length
+        ? `<div class="chips multi small">${apps.map(a => `<button class="chip ${d.activities.includes(a.package) ? 'on' : ''}" data-act="ge-pick" data-val="${esc(a.package)}">${esc(a.name)}</button>`).join('')}</div><div class="hint">Classées de la plus utilisée à la moins utilisée (30 derniers jours).</div>`
+        : screenPlugin() ? `<div class="hint" style="margin-bottom:10px">Aucune donnée pour l'instant.</div><button class="btn quiet" data-act="screen-sync">Lire mon temps d'écran</button>`
+        : `<div class="hint">La liste de tes applications s'affiche dans l'application Android.</div>`) + `</div>`;
+    }
+  }
   if (d.cat === 'reduce') {
     h += `<div class="field"><label>Quoi ?</label><div class="seg">${Object.entries(REDUCE_TYPES).map(([k, r]) =>
       `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${r.emoji} ${r.label}</button>`).join('')}</div></div>`;
@@ -1344,10 +1446,11 @@ function renderGoalEditor() {
   // 6. objectifs chiffrés
   const ms = draftMetrics(d).filter(m => m !== 'once');
   if (ms.length) {
-    const unitFor = m => d.cat === 'other' ? (m === 'days' ? 'jours' : d.unit || '…') : m === 'limit' ? (REDUCE_TYPES[d.subtype] || REDUCE_TYPES.alcohol).unit : unitOf({ cat: d.cat, subtype: d.subtype }, m);
-    h += `<div class="field"><label>${d.cat === 'reduce' ? 'Maximum par ' + per : 'Objectif par ' + per}</label>` + ms.map(m =>
+    const unitFor = m => d.cat === 'screen' ? 'minutes' : d.cat === 'other' ? (m === 'days' ? 'jours' : d.unit || '…') : m === 'limit' ? (REDUCE_TYPES[d.subtype] || REDUCE_TYPES.alcohol).unit : unitOf({ cat: d.cat, subtype: d.subtype }, m);
+    h += `<div class="field"><label>${d.cat === 'reduce' || d.cat === 'screen' ? 'Maximum par ' + per : 'Objectif par ' + per}</label>` + ms.map(m =>
       `<div class="trow"><div class="tl">${esc(unitFor(m))}</div><div class="stepper"><button data-act="step" data-m="${m}" data-val="-1">−</button><input class="inp" id="ge-t-${m}" type="number" inputmode="decimal" min="${m === 'limit' ? 0 : 1}" ${m === 'days' ? `max="${dailyMax(d.period)}"` : ''} value="${draftTarget(m)}"><button data-act="step" data-m="${m}" data-val="1">+</button></div></div>`).join('') +
-      (d.cat === 'reduce' ? `<div class="hint">Résolution tenue tant que tu ne dépasses pas ce nombre. Mets 0 pour arrêter complètement.</div>` : '') + `</div>`;
+      (d.cat === 'reduce' ? `<div class="hint">Résolution tenue tant que tu ne dépasses pas ce nombre. Mets 0 pour arrêter complètement.</div>` : '') +
+      (d.cat === 'screen' ? `<div class="hint" id="ge-screen-hint">Soit ${hm(draftTarget('limit'))} maximum. Le temps est relevé automatiquement sur ton téléphone.</div>` : '') + `</div>`;
     if (d.cat === 'other' && d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
   }
   // 7. blessure / archivage
@@ -1368,9 +1471,10 @@ function saveGoal() {
   if (d.cat === 'other' && d.type === 'daily' && !dailyMax(d.period)) d.type = 'count';
   const ms = draftMetrics(d);
   if (!ms.length) { toast('Choisis au moins une chose à suivre'); return; }
+  if (d.cat === 'screen' && d.subtype !== 'total' && !d.activities.length) { toast(d.subtype === 'apps' ? 'Choisis au moins une application' : 'Choisis au moins une catégorie'); return; }
   const targets = {};
   for (const m of ms) {
-    let t = m === 'once' ? 1 : num(d.targets[m] != null ? d.targets[m] : defaultTarget(m, d.period));
+    let t = m === 'once' ? 1 : num(d.targets[m] != null ? d.targets[m] : d.cat === 'screen' ? SCREEN_DEFAULT[d.period] : defaultTarget(m, d.period));
     if (m === 'days') t = Math.min(dailyMax(d.period), Math.max(1, Math.round(t)));
     else if (m === 'limit') t = Math.max(0, Math.round(t));
     else t = Math.max(m === 'time' || m === 'distance' ? 0.1 : 1, t);
@@ -1379,9 +1483,9 @@ function saveGoal() {
   const type = ms[0] === 'once' ? 'once' : ms[0] === 'days' ? 'daily' : ['pages', 'quantity', 'limit'].includes(ms[0]) ? 'quantity' : 'count';
   const fields = {
     name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type, metrics: ms,
-    subtype: d.cat === 'sport' || d.cat === 'reduce' ? d.subtype : null, isLimit: d.cat === 'reduce',
+    subtype: ['sport', 'reduce', 'screen'].includes(d.cat) ? d.subtype : null, isLimit: d.cat === 'reduce' || d.cat === 'screen',
     unit: d.cat === 'other' ? (ms[0] === 'days' ? 'jours' : ms[0] === 'once' ? '' : (d.unit || '').trim()) : unitOf({ cat: d.cat, subtype: d.subtype, unit: '' }, ms[0]),
-    activities: d.cat === 'sport' ? d.activities : [], distance: ms.includes('distance'),
+    activities: d.cat === 'sport' || (d.cat === 'screen' && d.subtype !== 'total') ? d.activities : [], distance: ms.includes('distance'),
   };
   const items = clone(goalsList());
   if (d._new) {
@@ -1398,6 +1502,17 @@ function saveGoal() {
     }
   }
   closeSheet(); saveGoals(items); toast(d._new ? 'Résolution ajoutée' : 'Résolution mise à jour');
+  if (d.cat === 'screen') syncScreenTime(true).then(render);
+}
+// applications vues dans le temps d'écran des 30 derniers jours, des plus utilisées aux moins utilisées
+function knownApps() {
+  const by = {}, since = addDays(todayKey(), -30);
+  for (const [d, apps] of Object.entries(state.screen || {})) if (d >= since) for (const x of apps) {
+    const a = by[x.package] || (by[x.package] = { package: x.package, name: x.name || x.package, minutes: 0 });
+    a.minutes += num(x.minutes);
+  }
+  for (const p of (goalDraft && goalDraft.activities) || []) if (goalDraft.cat === 'screen' && !by[p] && !APP_CATS[p]) by[p] = { package: p, name: p.split('.').pop(), minutes: 0 };
+  return Object.values(by).sort((a, b) => b.minutes - a.minutes).slice(0, 60);
 }
 async function addUserSport() {
   readGoalForm();
@@ -1617,9 +1732,9 @@ const ACTIONS = {
     if (d.cat === c) return;
     d.cat = c; d.targets = {}; d.activities = [];
     d.metrics = (CAT_DEFAULT_METRICS[c] || ['count']).slice();
-    d.subtype = c === 'sport' ? 'any' : c === 'reduce' ? 'alcohol' : null;
+    d.subtype = c === 'sport' ? 'any' : c === 'reduce' ? 'alcohol' : c === 'screen' ? 'total' : null;
     if (c === 'other') { d.type = 'count'; d.unit = 'fois'; }
-    if (!d.emoji || d.emoji === '🎯' || Object.values(CATS).some(x => x.emoji === d.emoji) || ['🍷', '🚬', '🏃', '🏋️'].includes(d.emoji))
+    if (!d.emoji || d.emoji === '🎯' || Object.values(CATS).some(x => x.emoji === d.emoji) || ['🍷', '🚬', '🏃', '🏋️', '📱'].includes(d.emoji))
       d.emoji = c === 'reduce' ? REDUCE_TYPES.alcohol.emoji : c === 'other' ? '🎯' : CATS[c].emoji;
     renderGoalEditor();
   },
@@ -1627,6 +1742,7 @@ const ACTIONS = {
     readGoalForm();
     const d = goalDraft; d.subtype = el.dataset.val;
     if (d.cat === 'reduce') d.emoji = REDUCE_TYPES[d.subtype].emoji;
+    if (d.cat === 'screen') { d.activities = []; if (d.subtype === 'apps') syncScreenTime(true).then(() => { if (goalDraft === d && sheetOpen()) { readGoalForm(); renderGoalEditor(); } }); }
     if (d.cat === 'sport') {
       if (['💪', '🏃', '🏋️'].includes(d.emoji)) d.emoji = { any: '💪', cardio: '🏃', muscu: '🏋️' }[d.subtype];
       const ok = new Set(sportsFor(d.subtype).map(x => x.name));
@@ -1648,15 +1764,28 @@ const ACTIONS = {
     d.activities = d.activities.includes(n) ? d.activities.filter(x => x !== n) : [...d.activities, n];
     renderGoalEditor();
   },
+  'ge-pick': el => {
+    readGoalForm();
+    const d = goalDraft, n = el.dataset.val;
+    d.activities = d.activities.includes(n) ? d.activities.filter(x => x !== n) : [...d.activities, n];
+    renderGoalEditor();
+  },
+  'screen-perm': async () => { try { await screenPlugin().openSettings(); } catch (e) { toast('Ouvre Paramètres → Applications → Accès spécial → Accès aux données d\'utilisation'); } },
+  'screen-sync': async () => {
+    await syncScreenTime(true);
+    if (state.screenPerm === false) { toast("Autorise d'abord l'accès au temps d'écran"); try { await screenPlugin().openSettings(); } catch (e) {} return; }
+    if (sheetOpen() && goalDraft) { readGoalForm(); renderGoalEditor(); }
+  },
   'ge-new-sport': () => { readGoalForm(); newSportOpen = !newSportOpen; renderGoalEditor(); if (newSportOpen) setTimeout(() => { const el = $('#ge-newsport'); if (el) el.focus(); }, 50); },
   'ge-add-sport': () => addUserSport(),
   'step': el => {
     readGoalForm();
     const m = el.dataset.m, d = goalDraft, t = num(d.targets[m] != null ? d.targets[m] : defaultTarget(m, d.period));
-    const inc = +el.dataset.val * (t >= 200 ? 50 : t >= 50 ? 10 : t >= 20 && m !== 'limit' ? 5 : 1);
+    const inc = +el.dataset.val * (d.cat === 'screen' ? (t >= 600 ? 60 : 15) : t >= 200 ? 50 : t >= 50 ? 10 : t >= 20 && m !== 'limit' ? 5 : 1);
     let v = Math.max(m === 'limit' ? 0 : 1, t + inc);
     if (m === 'days') v = Math.min(dailyMax(d.period), v);
     d.targets[m] = v; $('#ge-t-' + m).value = v;
+    if (d.cat === 'screen') { readGoalForm(); renderGoalEditor(); }
   },
   'en-step': el => { const i = $('#en-amount'); i.value = Math.max(1, num(i.value) + +el.dataset.val); },
   'toggle-injury': () => toggleInjury(),
@@ -1733,6 +1862,7 @@ document.addEventListener('change', async e => {
   }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'ge-t-limit' && $('#ge-screen-hint')) $('#ge-screen-hint').textContent = `Soit ${hm(num(e.target.value))} maximum. Le temps est relevé automatiquement sur ton téléphone.`;
   if (e.target.id === 'su-first') setupDraft.first = e.target.value;
   if (e.target.id === 'su-last') setupDraft.last = e.target.value;
 });

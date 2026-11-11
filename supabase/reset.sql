@@ -8,6 +8,7 @@
 drop trigger if exists on_auth_user_created on auth.users;
 
 -- tables (les règles de sécurité et index partent avec)
+drop table if exists public.screen_time cascade;
 drop table if exists public.user_sports cascade;
 drop table if exists public.sports   cascade;
 drop table if exists public.entries  cascade;
