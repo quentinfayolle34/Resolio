@@ -153,6 +153,12 @@ nav button.on svg{stroke:var(--accent)}
 .chip.date b{font-size:15px}
 .seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .seg.three{grid-template-columns:repeat(3,1fr)}
+.seg.four{grid-template-columns:repeat(4,1fr)}
+.ptabs{display:flex;gap:4px;background:var(--surface);padding:4px;border-radius:14px;margin:8px 0 6px}
+.ptabs button{flex:1;height:38px;border-radius:11px;font-weight:600;font-size:14px;color:var(--muted)}
+.ptabs button.on{background:var(--surface2);color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.add.is-done{background:var(--surface2)!important}
+.add.is-done svg{stroke:var(--accent)!important}
 .seg button{min-height:46px;border-radius:13px;background:var(--surface2);font-weight:600;font-size:13.5px;color:var(--muted);padding:6px}
 .seg button.on{background:var(--text);color:var(--bg)}
 .seg button small{display:block;font-weight:500;font-size:11px;opacity:.75}
@@ -205,7 +211,7 @@ nav button.on svg{stroke:var(--accent)}
 <body>
 <div id="app"><div class="loading"><div><div class="pulse"></div>Chargement…</div></div></div>
 <nav id="nav" hidden><div class="in">
-  <button data-act="tab" data-tab="semaine"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semaine</button>
+  <button data-act="tab" data-tab="resolutions"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Résolutions</button>
   <button data-act="tab" data-tab="historique"><svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4h4M12 7.5V12l3 2"/></svg>Historique</button>
   <button data-act="tab" data-tab="objectifs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></svg>Objectifs</button>
   <button data-act="tab" data-tab="profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-4 4-5.8 7.5-5.8s6.3 1.8 7.5 5.8"/></svg>Profil</button>
@@ -265,20 +271,21 @@ function redirectUrl(kind) {
 const profileFromRow = (r, user) => ({
   firstName: r.first_name || '', lastName: r.last_name || '', name: r.first_name || '',
   photo: r.avatar_url || null, birthDate: r.birth_date || '', city: r.city || '',
-  startWeek: r.start_week || null, createdAt: Date.parse(r.created_at) || Date.now(),
+  startWeek: r.start_week || null, recaps: r.recaps || {}, createdAt: Date.parse(r.created_at) || Date.now(),
   email: (user && user.email) || ''
 });
 const profileToRow = p => ({
   first_name: (p.firstName || '').trim(), last_name: (p.lastName || '').trim(), avatar_url: p.photo || null,
-  birth_date: p.birthDate || null, city: (p.city || '').trim() || null, start_week: p.startWeek || null
+  birth_date: p.birthDate || null, city: (p.city || '').trim() || null, start_week: p.startWeek || null,
+  recaps: p.recaps || {}
 });
 const goalFromRow = r => ({
-  id: r.id, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
+  id: r.id, period: r.period || 'week', name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
   activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
   position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
 });
 const goalToRow = (g, uid) => ({
-  id: g.id, user_id: uid, name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
+  id: g.id, user_id: uid, period: periodOf(g), name: g.name, emoji: g.emoji || '🎯', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
   activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek, archived_week: g.archivedWeek || null,
   position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || []
 });
@@ -402,9 +409,9 @@ function createSupabaseBackend() {
 // phase : 'loading' | 'config' (Supabase non configuré) | 'auth' (pas connecté) | 'offline' | 'setup' (compte sans objectifs) | 'app'
 const state = { phase: 'loading', user: null, profile: null, goals: null, weeks: {}, loadErr: '', legacy: null };
 let backend = null;
-const TABS = ['semaine', 'historique', 'objectifs', 'profil'];
-let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'semaine';
-let lastWeekSeen = curWeek();
+const TABS = ['resolutions', 'historique', 'objectifs', 'profil'];
+let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'resolutions';
+let lastWeekSeen = todayKey();
 const uid = () => state.user && state.user.id;
 
 // File d'attente des écritures : une à la fois, dans l'ordre. En cas d'échec, on recharge depuis la base.
@@ -595,16 +602,70 @@ function defaultUnit(type, cat) {
   if (type === 'daily') return 'jours';
   return '';
 }
-function targetFor(g, wk) {
+/* ---- périodes : jour / semaine / mois / année ----
+ * Chaque objectif a une période (g.period, 'week' par défaut pour les anciens objectifs).
+ * Une période est identifiée par sa date de début ("clé") : le jour, le lundi, le 1er du mois, le 1er janvier.
+ * g.createdWeek / g.archivedWeek / targetHistory[].from / injuries[].from|to contiennent des clés
+ * de la période de l'objectif (noms hérités de la version "semaine seulement").
+ */
+const PERIODS = ['day', 'week', 'month', 'year'];
+const P = {
+  day:   { tab: 'Jour',    per: 'jour',    now: "aujourd'hui",  eyebrow: "Aujourd'hui",       validated: 'Journée validée',  journal: 'Journal du jour',      hist: 'Tes journées', stat: 'journées validées',  ok: 'Validée', ko: 'Non validée' },
+  week:  { tab: 'Semaine', per: 'semaine', now: 'cette semaine', eyebrow: 'Semaine en cours', validated: 'Semaine validée',  journal: 'Journal de la semaine', hist: 'Tes semaines', stat: 'semaines validées',  ok: 'Validée', ko: 'Non validée' },
+  month: { tab: 'Mois',    per: 'mois',    now: 'ce mois-ci',    eyebrow: 'Mois en cours',    validated: 'Mois validé',      journal: 'Journal du mois',      hist: 'Tes mois', stat: 'mois validés',      ok: 'Validé',  ko: 'Non validé' },
+  year:  { tab: 'Année',   per: 'an',      now: 'cette année',   eyebrow: 'Année en cours',   validated: 'Année validée',    journal: "Journal de l'année",   hist: 'Tes années', stat: 'années validées',    ok: 'Validée', ko: 'Non validée' },
+};
+const DAYS_FULL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const periodOf = g => (g && g.period) || 'week';
+function periodStart(p, d = new Date()) {
+  if (p === 'day') return dkey(d);
+  if (p === 'week') return mondayKey(d);
+  if (p === 'month') return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+  return `${d.getFullYear()}-01-01`;
+}
+function periodNext(p, k) {
+  const d = pkey(k);
+  if (p === 'day') return addDays(k, 1);
+  if (p === 'week') return addDays(k, 7);
+  if (p === 'month') return dkey(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  return `${d.getFullYear() + 1}-01-01`;
+}
+function periodPrev(p, k) {
+  const d = pkey(k);
+  if (p === 'day') return addDays(k, -1);
+  if (p === 'week') return addDays(k, -7);
+  if (p === 'month') return dkey(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  return `${d.getFullYear() - 1}-01-01`;
+}
+function periodTitle(p, k, withYear) {
+  const d = pkey(k), y = withYear && d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : '';
+  if (p === 'day') return `${DAYS_FULL[d.getDay()]} ${d.getDate()} ${MONTHS_L[d.getMonth()]}${y}`;
+  if (p === 'week') return weekLabel(k, withYear);
+  if (p === 'month') { const m = MONTHS_L[d.getMonth()]; return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear(); }
+  return String(d.getFullYear());
+}
+const daysLeft = p => Math.round((pkey(periodNext(p, periodStart(p))) - pkey(todayKey())) / 864e5);
+function entriesBetween(a, b) {
+  const out = [];
+  for (const w of Object.values(state.weeks)) {
+    if (w.week >= b || addDays(w.week, 7) <= a) continue;
+    for (const e of (w.entries || [])) if (e.date >= a && e.date < b) out.push(e);
+  }
+  return out;
+}
+
+function targetFor(g, key) {
   const h = (g.targetHistory || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
   if (g.type === 'once') return 1;
   if (!h.length) return g.target || 1;
   let t = h[0].target;
-  for (const x of h) if (x.from <= wk) t = x.target;
+  for (const x of h) if (x.from <= key) t = x.target;
   return t;
 }
-const isActive = (g, wk) => g.createdWeek <= wk && (!g.archivedWeek || wk < g.archivedWeek);
-const isInjured = (g, wk) => (g.injuries || []).some(p => p.from <= wk && (!p.to || wk < p.to));
+const curTarget = g => targetFor(g, periodStart(periodOf(g)));
+const isActive = (g, key) => g.createdWeek <= key && (!g.archivedWeek || key < g.archivedWeek);
+const isArchived = g => !!g.archivedWeek && periodStart(periodOf(g)) >= g.archivedWeek;
+const isInjured = (g, key) => (g.injuries || []).some(p => p.from <= key && (!p.to || key < p.to));
 const injuredNow = g => (g.injuries || []).some(p => !p.to);
 function doneFor(g, entries) {
   const es = (entries || []).filter(e => e.goalId === g.id);
@@ -613,19 +674,27 @@ function doneFor(g, entries) {
   if (g.type === 'once') return Math.min(es.length, 1);
   return es.length;
 }
-function computeResult(wk, doc) {
-  const goals = goalsList().filter(g => isActive(g, wk)).map(g => {
-    const target = targetFor(g, wk), done = doneFor(g, doc.entries);
-    const status = isInjured(g, wk) ? 'injured' : done >= target ? 'ok' : 'ko';
+// Bilan d'une période : objectifs de cette période actifs à cette date, avec leur avancement
+function computePeriod(p, start, entries) {
+  const goals = goalsList().filter(g => periodOf(g) === p && isActive(g, start)).map(g => {
+    const target = targetFor(g, start), done = doneFor(g, entries);
+    const status = isInjured(g, start) ? 'injured' : done >= target ? 'ok' : 'ko';
     return { id: g.id, name: g.name, emoji: g.emoji, unit: g.unit || '', type: g.type, target, done, status };
   });
   const counted = goals.filter(x => x.status !== 'injured');
   return { goals, validated: counted.length > 0 && counted.every(x => x.status === 'ok'), exempt: counted.length === 0 };
 }
+const computeResult = (wk, doc) => computePeriod('week', wk, doc.entries);
+function periodResult(p, start) {
+  const w = state.weeks[start];
+  if (p === 'week' && w && w.closed && w.result) return w.result;   // bilan enregistré à la clôture du lundi
+  return computePeriod(p, start, entriesBetween(start, periodNext(p, start)));
+}
 const liveResult = () => computeResult(curWeek(), weekDoc(curWeek()));
+const activePeriods = () => PERIODS.filter(p => goalsList().some(g => periodOf(g) === p && isActive(g, periodStart(p))));
 
 /* ============ weekly closing (lundi 00:00) ============ */
-let recapOpenFor = null;
+let recapOpenFor = null, recapQueue = [];
 function maintenance() {
   if (state.phase !== 'app' || !state.profile || !state.goals) return;
   const cur = curWeek(), closing = [];
@@ -637,20 +706,51 @@ function maintenance() {
       const doc = w ? clone(w) : { week: k, entries: [] };
       doc.closed = true;
       doc.result = computeResult(k, doc);
-      doc.recapSeen = k !== prev;
+      doc.recapSeen = k !== prev || !doc.result.goals.length;
       state.weeks[k] = doc;
       closing.push(weekToRow(k, doc, uid()));
     }
     k = addDays(k, 7);
   }
   if (closing.length) write(() => backend.upsertWeeks(closing));
-  const pw = state.weeks[prev];
-  if (pw && pw.closed && pw.result && !pw.recapSeen && recapOpenFor !== prev && !sheetOpen()) openRecap(prev);
+
+  // Bilans de fin de période : jour (minuit), semaine (dimanche minuit), mois (dernier jour minuit), année (31 déc. minuit).
+  // On montre le bilan de la dernière période terminée de chaque type, une seule fois (profile.recaps[p] = dernière période vue).
+  if (sheetOpen() || recapOpenFor) return;
+  const seen = Object.assign({}, state.profile.recaps || {});
+  let changed = false;
+  recapQueue = [];
+  for (const p of PERIODS) {
+    const last = periodPrev(p, periodStart(p));
+    if ((seen[p] || '') >= last) continue;
+    if (!periodResult(p, last).goals.length) { seen[p] = last; changed = true; continue; }   // rien à résumer
+    recapQueue.push({ p, k: last });
+  }
+  if (changed) { const pr = clone(state.profile); pr.recaps = seen; saveProfile(pr); }
+  if (recapQueue.length) openRecap(recapQueue.shift());
+}
+// Statistiques d'une période (historique + bilans) : validées / total, série en cours, record
+function periodStats(p) {
+  const cur = periodStart(p), first = goalsList().filter(g => periodOf(g) === p).map(g => g.createdWeek).sort()[0];
+  const list = [];
+  for (let k = periodPrev(p, cur), n = 0; first && k >= first && n < 400; k = periodPrev(p, k), n++) {
+    const r = periodResult(p, k);
+    if (r.goals.length) list.push({ k, r });
+  }
+  let run = 0, best = 0, valid = 0, total = 0;
+  for (const { r } of list.slice().reverse()) {
+    if (r.exempt) continue;
+    total++;
+    if (r.validated) { valid++; run++; best = Math.max(best, run); } else run = 0;
+  }
+  let streak = run;
+  if (computePeriod(p, cur, entriesBetween(cur, periodNext(p, cur))).validated) { streak++; best = Math.max(best, streak); }
+  return { list, valid, total, streak, best };
 }
 setInterval(() => {
-  if (curWeek() !== lastWeekSeen) { lastWeekSeen = curWeek(); maintenance(); render(); }
+  if (todayKey() !== lastWeekSeen) { lastWeekSeen = todayKey(); maintenance(); render(); }   // minuit : nouvelle période
 }, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = curWeek(); reloadData(false); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = todayKey(); reloadData(false); } });
 
 /* ============ stats & badges ============ */
 function computeStats() {
@@ -709,7 +809,7 @@ function render() {
   if (state.phase === 'setup') return full(viewSetup());
   $('#nav').hidden = false;
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  const v = { semaine: viewWeek, historique: viewHistory, objectifs: viewGoals, profil: viewProfile }[tab];
+  const v = { resolutions: viewResolutions, historique: viewHistory, objectifs: viewGoals, profil: viewProfile }[tab];
   app.innerHTML = brand() + v();
 }
 
@@ -740,49 +840,59 @@ function viewSetup() {
 
 function goalMeta(g, done, target) {
   const u = g.unit ? ' ' + esc(g.unit) : '';
-  if (g.type === 'once') return done ? 'Fait cette semaine' : 'À faire cette semaine';
+  if (g.type === 'once') return (done ? 'Fait ' : 'À faire ') + P[periodOf(g)].now;
   return `<b>${fmt(done)}</b> / ${fmt(target)}${u}`;
 }
-function viewWeek() {
-  const cur = curWeek(), doc = weekDoc(cur), res = computeResult(cur, doc);
-  const counted = res.goals.filter(x => x.status !== 'injured');
-  const ok = counted.filter(x => x.status === 'ok').length;
-  const dayIdx = (new Date().getDay() + 6) % 7, left = 7 - dayIdx;
-  const leftTxt = left === 1 ? 'Dernier jour, fonce !' : `Encore ${left} jours`;
-  let h = `<div class="eyebrow">Semaine en cours</div><h1>${weekLabel(cur)}</h1>`;
-  h += `<div class="summary">${ring(counted.length ? ok / counted.length : 0)}<div><b>${ok} / ${counted.length}</b> <span class="muted">objectifs atteints</span><div class="muted" style="font-size:13.5px">${leftTxt}</div></div></div>`;
-  if (res.validated) h += `<div class="validated-banner">🔥 Semaine validée. Bien joué ${esc(state.profile.name)} !</div>`;
-  const active = goalsList().filter(g => isActive(g, cur));
-  if (!active.length) h += `<div class="empty">Aucun objectif actif.<br><br><button class="btn" data-act="new-goal">Ajouter un objectif</button></div>`;
-  for (const g of active) {
+let period = 'week';
+function viewResolutions() {
+  const avail = activePeriods();
+  if (!avail.length) return `<div class="eyebrow">Résolutions</div><h1>Rien en cours</h1>
+    <div class="empty" style="margin-top:18px">Tu n'as aucune résolution active.<br><br><button class="btn" data-act="new-goal">Ajouter une résolution</button></div>`;
+  if (!avail.includes(period)) period = avail.includes('week') ? 'week' : avail[0];
+  const p = period, start = periodStart(p), next = periodNext(p, start), today = todayKey();
+  const entries = entriesBetween(start, next), res = computePeriod(p, start, entries);
+  let h = avail.length > 1 ? `<div class="ptabs">${avail.map(x => `<button class="${x === p ? 'on' : ''}" data-act="period" data-val="${x}">${P[x].tab}</button>`).join('')}</div>` : '';
+  const counted = res.goals.filter(x => x.status !== 'injured'), ok = counted.filter(x => x.status === 'ok').length;
+  const left = daysLeft(p);
+  const leftTxt = p === 'day' ? "Jusqu'à minuit" : left === 1 ? 'Dernier jour, fonce !' : `Encore ${left} jours`;
+  h += `<div class="eyebrow">${P[p].eyebrow}</div><h1>${periodTitle(p, start)}</h1>`;
+  h += `<div class="summary">${ring(counted.length ? ok / counted.length : 0)}<div><b>${ok} / ${counted.length}</b> <span class="muted">résolution${counted.length > 1 ? 's tenues' : ' tenue'}</span><div class="muted" style="font-size:13.5px">${leftTxt}</div></div></div>`;
+  if (res.validated) h += `<div class="validated-banner">🔥 ${P[p].validated}. Bien joué ${esc(state.profile.name)} !</div>`;
+  for (const g of goalsList().filter(g => periodOf(g) === p && isActive(g, start))) {
     const r = res.goals.find(x => x.id === g.id);
     const inj = r.status === 'injured', done = r.status === 'ok';
     const pct = Math.min(100, r.target ? r.done / r.target * 100 : 0);
+    const dots = g.type === 'daily' && p === 'week';
+    const doneToday = g.type === 'daily' && entries.some(e => e.goalId === g.id && e.date === today);
     let tags = '';
     if (inj) tags = `<span class="tag inj">🩹 Blessure · ne compte pas</span>`;
     else if (done) tags = `<span class="tag ok">Atteint</span>`;
-    const btn = inj ? '' : g.type === 'daily' ? '' :
-      `<button class="add" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && g.type === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
+    let btn = '';
+    if (!inj && !dots) {
+      if (g.type === 'daily') btn = `<button class="add ${doneToday ? 'is-done' : ''}" data-act="toggle-day" data-id="${g.id}" data-date="${today}" aria-label="Fait aujourd'hui">${doneToday ? ICON_CHECK : ICON_PLUS}</button>`;
+      else btn = `<button class="add ${done && g.type === 'once' ? 'is-done' : ''}" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && g.type === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
+    }
     h += `<div class="goal ${done ? 'done' : ''} ${inj ? 'injured' : ''}">
       <div class="g-top"><div class="emoji">${esc(g.emoji || '🎯')}</div>
-        <div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalMeta(g, r.done, r.target)}</div></div>
+        <div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalMeta(g, r.done, r.target)}${g.type === 'daily' && !dots ? ` · ${doneToday ? "fait aujourd'hui" : "pas encore aujourd'hui"}` : ''}</div></div>
         ${tags && !btn ? tags : ''}${btn}
       </div>`;
-    if (g.type === 'daily') {
-      const set = new Set((doc.entries || []).filter(e => e.goalId === g.id).map(e => e.date));
+    if (dots) {
+      const set = new Set(entries.filter(e => e.goalId === g.id).map(e => e.date));
       h += `<div class="days">` + DAYS.map((d, i) => {
-        const dk = addDays(cur, i), fut = dk > todayKey();
-        return `<button class="day ${set.has(dk) ? 'on' : ''} ${dk === todayKey() ? 'today' : ''}" ${fut || inj ? 'disabled' : ''} data-act="toggle-day" data-id="${g.id}" data-date="${dk}">${d}</button>`;
+        const dk = addDays(start, i), fut = dk > today;
+        return `<button class="day ${set.has(dk) ? 'on' : ''} ${dk === today ? 'today' : ''}" ${fut || inj ? 'disabled' : ''} data-act="toggle-day" data-id="${g.id}" data-date="${dk}">${d}</button>`;
       }).join('') + `</div>`;
     } else if (g.type !== 'once') h += `<div class="bar"><i style="width:${pct}%"></i></div>`;
     if (tags && btn) h += `<div style="margin-top:10px">${tags}</div>`;
     h += `</div>`;
   }
-  const entries = (doc.entries || []).filter(e => e.goalId && goalById(e.goalId) && goalById(e.goalId).type !== 'daily')
-    .slice().sort((a, b) => a.date === b.date ? (b.at || 0) - (a.at || 0) : a.date < b.date ? 1 : -1);
-  h += `<h2>Journal de la semaine</h2>`;
-  if (!entries.length) h += `<div class="empty">Rien pour l'instant. Appuie sur <b style="color:var(--accent)">+</b> pour enregistrer une séance ou ta lecture.</div>`;
-  else h += `<div class="card">` + entries.map(e => entryRow(e)).join('') + `</div>`;
+  const ids = new Set(res.goals.map(x => x.id));
+  const journal = entries.filter(e => ids.has(e.goalId) && goalById(e.goalId).type !== 'daily')
+    .sort((a, b) => a.date === b.date ? (b.at || 0) - (a.at || 0) : a.date < b.date ? 1 : -1);
+  h += `<h2>${P[p].journal}</h2>`;
+  if (!journal.length) h += `<div class="empty">Rien pour l'instant. Appuie sur <b style="color:var(--accent)">+</b> pour enregistrer une séance, une lecture…</div>`;
+  else h += `<div class="card">` + journal.slice(0, 60).map(e => entryRow(e)).join('') + `</div>` + (journal.length > 60 ? `<div class="hint" style="text-align:center;margin-top:8px">Les 60 derniers enregistrements sont affichés.</div>` : '');
   return h;
 }
 function entryDesc(e, g) {
@@ -798,51 +908,64 @@ let pendingDel = null, pendingDelT, logoutConfirm = false;
 function entryRow(e) {
   const g = goalById(e.goalId);
   const parts = entryDesc(e, g);
-  const di = (pkey(e.date).getDay() + 6) % 7;
+  const dd = pkey(e.date), di = (dd.getDay() + 6) % 7;
+  const dayLbl = period === 'week' || period === 'day' ? DAYS_L[di] + ' ' + dd.getDate() : dd.getDate() + ' ' + MONTHS[dd.getMonth()];
   const title = parts.length ? esc(parts[0]) : esc(g.name);
-  const sub = [DAYS_L[di] + ' ' + pkey(e.date).getDate(), ...parts.slice(1).map(esc), e.note ? esc(e.note) : ''].filter(Boolean).join(' · ');
+  const sub = [dayLbl, ...parts.slice(1).map(esc), e.note ? esc(e.note) : ''].filter(Boolean).join(' · ');
   return `<div class="entry"><div class="e-emoji">${esc(g.emoji || '🎯')}</div><div class="e-main"><div class="e-title">${title}${parts.length ? ` <span class="muted" style="font-weight:500">· ${esc(g.name)}</span>` : ''}</div><div class="e-sub">${sub}</div></div>
     <button class="del ${pendingDel === e.id ? 'confirm' : ''}" data-act="del-entry" data-id="${e.id}">${pendingDel === e.id ? 'Supprimer ?' : 'Retirer'}</button></div>`;
 }
 
+let histPeriod = 'week';
 function viewHistory() {
-  const s = computeStats();
-  const closed = Object.values(state.weeks).filter(w => w.closed && w.result).sort((a, b) => a.week < b.week ? 1 : -1);
-  let h = `<div class="eyebrow">Rétrospective</div><h1>Tes semaines</h1>`;
-  h += `<div class="hist-stats"><div class="stat hl"><div class="v">${s.validated}<span class="muted" style="font-size:16px"> / ${s.total}</span></div><div class="l">semaines validées</div></div><div class="stat"><div class="v">${s.streak}</div><div class="l">série en cours</div></div></div>`;
+  const avail = PERIODS.filter(p => goalsList().some(g => periodOf(g) === p));
+  if (!avail.length) return `<div class="eyebrow">Rétrospective</div><h1>Historique</h1><div class="empty" style="margin-top:18px">Ajoute des résolutions pour voir ton historique ici.</div>`;
+  if (!avail.includes(histPeriod)) histPeriod = avail.includes('week') ? 'week' : avail[0];
+  const p = histPeriod, cur = periodStart(p);
+  let h = avail.length > 1 ? `<div class="ptabs">${avail.map(x => `<button class="${x === p ? 'on' : ''}" data-act="hist-period" data-val="${x}">${P[x].tab}</button>`).join('')}</div>` : '';
+  h += `<div class="eyebrow">Rétrospective</div><h1>${P[p].hist}</h1>`;
+  const { list, valid, total, streak, best } = periodStats(p);
+  h += `<div class="hist-stats"><div class="stat hl"><div class="v">${valid}<span class="muted" style="font-size:16px"> / ${total}</span></div><div class="l">${P[p].stat}</div></div><div class="stat"><div class="v">${streak}</div><div class="l">série en cours (record ${best})</div></div></div>`;
   h += `<h2>Historique</h2>`;
-  if (!closed.length) return h + `<div class="empty">Ta première rétrospective arrivera lundi ${weekLabel(addDays(curWeek(), 7)).split(' – ')[0]} à minuit.</div>`;
-  for (const w of closed) {
-    const r = w.result;
-    const badge = r.exempt ? `<span class="tag inj">🩹 Pause</span>` : r.validated ? `<span class="tag ok">✓ Validée</span>` : `<span class="tag ko">✗ Non validée</span>`;
-    h += `<details class="week-row"><summary><div class="wr-label">${weekLabel(w.week, true)}<small>${pkey(w.week).getFullYear()}</small></div>${badge}</summary><div class="wr-detail">` +
-      (r.goals.length ? r.goals.map(x => {
+  if (!list.length) {
+    const when = { day: 'demain', week: 'lundi prochain', month: 'le 1er du mois prochain', year: 'le 1er janvier' }[p];
+    return h + `<div class="empty">Ton premier bilan arrivera ${when}.</div>`;
+  }
+  for (const { k, r } of list.slice(0, p === 'day' ? 90 : 120)) {
+    const badge = r.exempt ? `<span class="tag inj">🩹 Pause</span>` : r.validated ? `<span class="tag ok">✓ ${P[p].ok}</span>` : `<span class="tag ko">✗ ${P[p].ko}</span>`;
+    const sub = p === 'week' || p === 'day' ? `<small>${pkey(k).getFullYear()}</small>` : '';
+    h += `<details class="week-row"><summary><div class="wr-label">${periodTitle(p, k, true)}${sub}</div>${badge}</summary><div class="wr-detail">` +
+      r.goals.map(x => {
         const ic = x.status === 'ok' ? '✓' : x.status === 'injured' ? '🩹' : '✗';
         const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
         return `<div class="wr-goal"><span>${ic} ${esc(x.emoji || '')} ${esc(x.name)}</span><span>${val}</span></div>`;
-      }).join('') : `<div class="wr-goal"><span class="muted">Aucun objectif actif</span></div>`) + `</div></details>`;
+      }).join('') + `</div></details>`;
   }
   return h;
 }
 
 function goalLine(g) {
-  const t = targetFor(g, curWeek());
-  if (g.type === 'once') return 'Une fois par semaine';
-  if (g.type === 'daily') return `${t} jour${t > 1 ? 's' : ''} / 7`;
-  return `${fmt(t)} ${esc(g.unit || '')} / semaine`;
+  const t = curTarget(g), per = P[periodOf(g)].per;
+  if (g.type === 'once') return 'Une fois par ' + per;
+  if (g.type === 'daily') return `${t} jour${t > 1 ? 's' : ''} par ${per}`;
+  return `${fmt(t)} ${esc(g.unit || '')} par ${per}`;
 }
 function viewGoals() {
-  const cur = curWeek();
-  const active = goalsList().filter(g => !g.archivedWeek || cur < g.archivedWeek);
-  const archived = goalsList().filter(g => g.archivedWeek && cur >= g.archivedWeek);
-  let h = `<div class="eyebrow">Réglages</div><h1>Objectifs</h1><div style="height:16px"></div>`;
-  active.forEach((g, i) => {
-    h += `<div class="gl-item"><div class="emoji">${esc(g.emoji || '🎯')}</div>
-      <div class="g-title" data-act="edit-goal" data-id="${g.id}"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalLine(g)}${injuredNow(g) ? ' · <span style="color:var(--inj)">🩹 blessure</span>' : ''}</div></div>
-      <div class="mv"><button data-act="move-goal" data-id="${g.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">▲</button><button data-act="move-goal" data-id="${g.id}" data-dir="1" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Descendre">▼</button></div></div>`;
-  });
-  h += `<button class="btn ghost" data-act="new-goal" style="margin-top:6px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Nouvel objectif</button>`;
-  h += `<div class="hint" style="margin-top:14px">Appuie sur un objectif pour changer son chiffre, le mettre en pause pour blessure ou l'archiver. Un changement de chiffre compte à partir de la semaine en cours : les semaines passées gardent leur ancien objectif.</div>`;
+  const active = goalsList().filter(g => !isArchived(g)), archived = goalsList().filter(isArchived);
+  let h = `<div class="eyebrow">Réglages</div><h1>Objectifs</h1>`;
+  for (const p of PERIODS) {
+    const list = active.filter(g => periodOf(g) === p);
+    if (!list.length) continue;
+    h += `<div class="lbl" style="margin:22px 0 10px">${P[p].tab}</div>`;
+    list.forEach((g, i) => {
+      h += `<div class="gl-item"><div class="emoji">${esc(g.emoji || '🎯')}</div>
+        <div class="g-title" data-act="edit-goal" data-id="${g.id}"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalLine(g)}${injuredNow(g) ? ' · <span style="color:var(--inj)">🩹 blessure</span>' : ''}</div></div>
+        <div class="mv"><button data-act="move-goal" data-id="${g.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">▲</button><button data-act="move-goal" data-id="${g.id}" data-dir="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Descendre">▼</button></div></div>`;
+    });
+  }
+  if (!active.length) h += `<div class="empty" style="margin-top:18px">Aucune résolution pour l'instant.</div>`;
+  h += `<button class="btn ghost" data-act="new-goal" style="margin-top:16px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Nouvel objectif</button>`;
+  h += `<div class="hint" style="margin-top:14px">Appuie sur un objectif pour changer son chiffre, le mettre en pause pour blessure ou l'archiver. Un changement de chiffre compte à partir de la période en cours : les périodes passées gardent leur ancien objectif.</div>`;
   if (archived.length) {
     h += `<h2>Archivés</h2>`;
     archived.forEach(g => {
@@ -912,16 +1035,15 @@ function allBooks() {
 function openEntrySheet(id) {
   const g = goalById(id); if (!g) return;
   if (g.type === 'once') {
-    const cur = curWeek(), doc = clone(weekDoc(cur));
-    const mine = doc.entries.filter(e => e.goalId === g.id);
-    if (mine.length) { doc.entries = doc.entries.filter(e => e.goalId !== g.id); saveWeek(cur, doc); toast('Marqué comme pas fait'); return; }
+    const st = periodStart(periodOf(g)), mine = entriesBetween(st, periodNext(periodOf(g), st)).filter(e => e.goalId === g.id);
+    if (mine.length) { removeEntries(mine.map(e => e.id)); toast('Marqué comme pas fait'); return; }
   }
   const acts = (g.activities || []).filter(Boolean);
   entryDraft = { goalId: id, date: todayKey(), activity: acts[0] || '' };
   renderEntrySheet();
 }
 function renderEntrySheet() {
-  const g = goalById(entryDraft.goalId), cur = curWeek();
+  const g = goalById(entryDraft.goalId), pStart = periodStart(periodOf(g));
   const acts = (g.activities || []).filter(Boolean);
   let h = `<div class="sh-title"><div class="emoji">${esc(g.emoji || '🎯')}</div><div class="t">${esc(g.name)}</div></div>`;
   if (g.type === 'quantity') h += `<div class="field"><label>${esc(g.unit || 'Quantité')}</label><input class="inp big" id="en-amount" type="number" inputmode="decimal" min="0" placeholder="0"></div>`;
@@ -932,10 +1054,11 @@ function renderEntrySheet() {
     if (g.distance) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Facultatif"></div>`;
     h += `</div>`;
   }
-  h += `<div class="field"><label>Jour</label><div class="chips">` + DAYS.map((d, i) => {
-    const dk = addDays(cur, i); if (dk > todayKey()) return '';
-    return `<button class="chip date ${entryDraft.date === dk ? 'on' : ''}" data-act="pick-date" data-val="${dk}">${d}<b>${pkey(dk).getDate()}</b></button>`;
-  }).join('') + `</div></div>`;
+  // jours possibles : les 7 derniers jours, sans sortir de la période en cours de l'objectif
+  const days = [];
+  for (let k = todayKey(), i = 0; i < 7 && k >= pStart; i++, k = addDays(k, -1)) days.unshift(k);
+  if (days.length > 1) h += `<div class="field"><label>Jour</label><div class="chips">` + days.map(dk =>
+    `<button class="chip date ${entryDraft.date === dk ? 'on' : ''}" data-act="pick-date" data-val="${dk}">${DAYS[(pkey(dk).getDay() + 6) % 7]}<b>${pkey(dk).getDate()}</b></button>`).join('') + `</div></div>`;
   h += `<div class="field"><label>Note</label><input class="inp" id="en-note" placeholder="Facultatif" maxlength="140"></div>`;
   h += `<button class="btn" data-act="save-entry">Enregistrer</button>`;
   const keep = sheetOpen() ? readEntryInputs() : null;
@@ -956,24 +1079,34 @@ function saveEntry() {
   if (num(v['en-dur']) > 0) e.duration = num(v['en-dur']);
   if (num(v['en-dist']) > 0) e.distance = num(v['en-dist']);
   if (v['en-note'] && v['en-note'].trim()) e.note = v['en-note'].trim();
-  const cur = curWeek(), doc = clone(weekDoc(cur));
-  const before = computeResult(cur, doc).goals.find(x => x.id === g.id);
-  doc.entries.push(e); doc.week = cur; doc.closed = false;
-  closeSheet(); saveWeek(cur, doc);
-  const after = computeResult(cur, doc);
+  const p = periodOf(g), st = periodStart(p), nx = periodNext(p, st);
+  const before = computePeriod(p, st, entriesBetween(st, nx)).goals.find(x => x.id === g.id);
+  const wk = mondayKey(pkey(e.date)), doc = clone(weekDoc(wk));
+  doc.entries.push(e); doc.week = wk;
+  closeSheet(); saveWeek(wk, doc);
+  const after = computePeriod(p, st, entriesBetween(st, nx));
   const ga = after.goals.find(x => x.id === g.id);
-  if (after.validated) toast('🔥 Semaine validée !');
+  if (after.validated && before && before.status !== 'ok') toast('🔥 ' + P[p].validated + ' !');
   else if (ga && ga.status === 'ok' && before && before.status !== 'ok') toast('✓ Objectif atteint !');
   else toast('Enregistré');
 }
 function toggleDay(id, date) {
-  const cur = curWeek(), doc = clone(weekDoc(cur));
+  const wk = mondayKey(pkey(date)), doc = clone(weekDoc(wk));
   const has = doc.entries.some(e => e.goalId === id && e.date === date);
   const g = goalById(id);
   if (has) doc.entries = doc.entries.filter(e => !(e.goalId === id && e.date === date));
   else doc.entries.push({ id: rid(), goalId: id, cat: g.cat || 'other', date, amount: 1, at: Date.now() });
-  doc.week = cur; doc.closed = false;
-  saveWeek(cur, doc);
+  doc.week = wk;
+  saveWeek(wk, doc);
+}
+// Retire des enregistrements, où qu'ils soient (une résolution du mois peut en avoir sur plusieurs semaines)
+function removeEntries(ids) {
+  const set = new Set(ids);
+  for (const [wk, w] of Object.entries(state.weeks)) {
+    if (!(w.entries || []).some(e => set.has(e.id))) continue;
+    const doc = clone(w); doc.entries = doc.entries.filter(e => !set.has(e.id));
+    saveWeek(wk, doc);
+  }
 }
 function deleteEntry(id) {
   if (pendingDel !== id) {
@@ -982,9 +1115,7 @@ function deleteEntry(id) {
     render(); return;
   }
   pendingDel = null;
-  const cur = curWeek(), doc = clone(weekDoc(cur));
-  doc.entries = doc.entries.filter(e => e.id !== id);
-  saveWeek(cur, doc); toast('Retiré');
+  removeEntries([id]); toast('Retiré');
 }
 
 /* ---- goal editor ---- */
@@ -992,8 +1123,8 @@ let goalDraft = null, archiveConfirm = false;
 const EMOJIS = ['📖', '🏃', '🏊', '🏋️', '🚴', '🧘', '🥾', '⚽', '💧', '🥗', '😴', '🧠', '✍️', '🎸', '🗣️', '💰', '🚭', '📵', '🧹', '🎯'];
 function openGoalEditor(id) {
   archiveConfirm = false;
-  if (id) goalDraft = Object.assign(clone(goalById(id)), { target: targetFor(goalById(id), curWeek()), _new: false });
-  else goalDraft = { _new: true, name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', target: 3, activities: [], distance: false };
+  if (id) goalDraft = Object.assign(clone(goalById(id)), { period: periodOf(goalById(id)), target: curTarget(goalById(id)), _new: false });
+  else goalDraft = { _new: true, period: period || 'week', name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', target: 3, activities: [], distance: false };
   renderGoalEditor();
 }
 function readGoalForm() {
@@ -1010,11 +1141,15 @@ function renderGoalEditor() {
   let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvel objectif' : 'Modifier l\'objectif'}</div></div>`;
   h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="ex. Méditer" maxlength="40"></div>
     <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
+  h += d._new
+    ? `<div class="field"><label>Période</label><div class="seg four">${PERIODS.map(p => `<button class="${d.period === p ? 'on' : ''}" data-act="seg" data-field="period" data-val="${p}">${P[p].tab}</button>`).join('')}</div>
+       <div class="hint">${{ day: 'À tenir chaque jour, remis à zéro à minuit.', week: 'À tenir sur la semaine, remis à zéro le lundi.', month: 'À tenir sur le mois, remis à zéro le 1er.', year: "À tenir sur l'année, remis à zéro le 1er janvier." }[d.period]}</div></div>`
+    : `<div class="field"><label>Période</label><div class="hint" style="margin:0">${P[d.period].tab} (la période ne se change pas après la création)</div></div>`;
   h += `<div class="field"><label>Catégorie</label><div class="seg three">${[['reading', '📖 Lecture'], ['sport', '💪 Sport'], ['other', '✨ Autre']].map(([k, l]) => `<button class="${d.cat === k ? 'on' : ''}" data-act="seg" data-field="cat" data-val="${k}">${l}</button>`).join('')}</div>
     <div class="hint">${d.cat === 'reading' ? 'Tu pourras noter le livre à chaque fois, et les pages comptent dans tes totaux.' : d.cat === 'sport' ? 'Tu pourras noter l\'activité, la durée et la distance. Compte dans tes séances.' : 'Objectif libre.'}</div></div>`;
-  h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).map(([k, t]) => `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
+  h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).filter(([k]) => k !== 'daily' || dailyMax(d.period)).map(([k, t]) => `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
   if (d.type !== 'once') {
-    h += `<div class="field"><label>${d.type === 'daily' ? 'Jours par semaine' : 'Objectif par semaine'}</label><div class="stepper"><button data-act="step" data-val="-1">−</button><input class="inp" id="ge-target" type="number" inputmode="decimal" min="1" ${d.type === 'daily' ? 'max="7"' : ''} value="${d.target}"><button data-act="step" data-val="1">+</button></div></div>`;
+    h += `<div class="field"><label>${d.type === 'daily' ? 'Jours par ' + P[d.period].per : 'Objectif par ' + P[d.period].per}</label><div class="stepper"><button data-act="step" data-val="-1">−</button><input class="inp" id="ge-target" type="number" inputmode="decimal" min="1" ${d.type === 'daily' ? `max="${dailyMax(d.period)}"` : ''} value="${d.target}"><button data-act="step" data-val="1">+</button></div></div>`;
     if (d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="pages, séances, km…" maxlength="20"></div>`;
   }
   if (d.cat === 'sport') {
@@ -1023,22 +1158,25 @@ function renderGoalEditor() {
   }
   if (!d._new) {
     const inj = injuredNow(goalById(d.id));
-    h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cet objectif ne compte pas pour valider tes semaines.' : 'L\'objectif ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
+    h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cet objectif ne compte pas dans tes bilans.' : 'L\'objectif ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
   }
   h += `<button class="btn" data-act="save-goal">${d._new ? 'Ajouter' : 'Enregistrer'}</button>`;
   if (!d._new) h += `<button class="btn danger ${archiveConfirm ? 'confirm' : ''}" data-act="archive-goal" style="margin-top:8px">${archiveConfirm ? 'Confirmer l\'archivage' : 'Archiver l\'objectif'}</button>`;
   const y = $('#sheet').scrollTop;
   openSheet(h); $('#sheet').scrollTop = y;
 }
+const dailyMax = p => p === 'week' ? 7 : p === 'month' ? 31 : 0;   // « chaque jour » : x jours par semaine / par mois
 function saveGoal() {
   readGoalForm();
-  const d = goalDraft, cur = curWeek();
+  const d = goalDraft, cur = periodStart(d.period);
   if (!d.name.trim()) { toast('Donne un nom à ton objectif'); return; }
-  let target = d.type === 'once' ? 1 : d.type === 'daily' ? Math.min(7, Math.max(1, Math.round(d.target))) : Math.max(1, d.target);
+  if (d.type === 'daily' && !dailyMax(d.period)) d.type = 'count';
+  let target = d.type === 'once' ? 1 : d.type === 'daily' ? Math.min(dailyMax(d.period), Math.max(1, Math.round(d.target))) : Math.max(1, d.target);
   const items = clone(goalsList());
   const fields = { name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type: d.type, unit: d.type === 'daily' ? 'jours' : d.type === 'once' ? '' : (d.unit || '').trim(), activities: d.cat === 'sport' ? d.activities : [], distance: d.cat === 'sport' && !!d.distance };
   if (d._new) {
-    items.push(Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target }] }, fields));
+    items.push(Object.assign({ id: rid(), period: d.period, createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target }] }, fields));
+    period = d.period;
   } else {
     const g = items.find(x => x.id === d.id);
     Object.assign(g, fields);
@@ -1052,10 +1190,10 @@ function saveGoal() {
 }
 function toggleInjury() {
   readGoalForm();
-  const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id), cur = curWeek();
+  const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id), cur = periodStart(periodOf(g));
   g.injuries = g.injuries || [];
   const open = g.injuries.find(p => !p.to);
-  if (open) { if (open.from === cur) g.injuries = g.injuries.filter(p => p !== open); else open.to = addDays(cur, 7); }
+  if (open) { if (open.from === cur) g.injuries = g.injuries.filter(p => p !== open); else open.to = periodNext(periodOf(g), cur); }
   else g.injuries.push({ from: cur, to: null });
   saveGoals(items);
   goalDraft.injuries = g.injuries;
@@ -1065,7 +1203,7 @@ function toggleInjury() {
 function archiveGoal() {
   if (!archiveConfirm) { archiveConfirm = true; readGoalForm(); renderGoalEditor(); return; }
   const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id);
-  g.archivedWeek = curWeek();
+  g.archivedWeek = periodStart(periodOf(g));
   closeSheet(); saveGoals(items); toast('Objectif archivé');
 }
 
@@ -1171,24 +1309,31 @@ function resizeImage(file) {
 }
 
 /* ---- recap ---- */
-function openRecap(k) {
-  recapOpenFor = k;
-  const w = state.weeks[k], r = w.result, s = computeStats();
+function openRecap({ p, k }) {
+  recapOpenFor = { p, k };
+  const r = periodResult(p, k), st = periodStats(p);
   const ok = r.validated, ex = r.exempt;
-  let h = `<div class="recap-hero ${ok ? 'ok' : ''}"><div class="eyebrow" style="margin:0 0 6px">Bilan · ${weekLabel(k)}</div><div class="big">${ex ? '🩹' : ok ? '🏆' : '💪'}</div>
-    <div class="t">${ex ? 'Semaine en pause' : ok ? 'Semaine validée !' : 'Pas cette fois'}</div>
-    <div class="muted" style="margin-top:6px">${ex ? 'Prends soin de toi.' : ok ? `Série en cours : ${s.streak} semaine${s.streak > 1 ? 's' : ''} 🔥` : 'Nouvelle semaine, nouvelle chance. Faut le faire.'}</div></div>`;
+  const unit = { day: ['jour', 'jours'], week: ['semaine', 'semaines'], month: ['mois', 'mois'], year: ['année', 'années'] }[p];
+  const pause = { day: 'Journée en pause', week: 'Semaine en pause', month: 'Mois en pause', year: 'Année en pause' }[p];
+  const again = { day: 'Nouvelle journée, nouvelle chance.', week: 'Nouvelle semaine, nouvelle chance.', month: 'Nouveau mois, nouvelle chance.', year: 'Nouvelle année, nouvelle chance.' }[p];
+  const cta = { day: "C'est parti pour aujourd'hui", week: "C'est parti pour cette semaine", month: "C'est parti pour ce mois-ci", year: "C'est parti pour cette année" }[p];
+  const label = { day: 'Bilan de la journée', week: 'Bilan de la semaine', month: 'Bilan du mois', year: "Bilan de l'année" }[p];
+  let h = `<div class="recap-hero ${ok ? 'ok' : ''}"><div class="eyebrow" style="margin:0 0 6px">${label} · ${periodTitle(p, k, true)}</div><div class="big">${ex ? '🩹' : ok ? '🏆' : '💪'}</div>
+    <div class="t">${ex ? pause : ok ? P[p].validated + ' !' : 'Pas cette fois'}</div>
+    <div class="muted" style="margin-top:6px">${ex ? 'Prends soin de toi.' : ok ? `Série en cours : ${st.streak} ${unit[st.streak > 1 ? 1 : 0]} 🔥` : again + ' Faut le faire.'}</div></div>`;
   h += `<div class="card" style="margin-bottom:18px">` + r.goals.map(x => {
     const ic = x.status === 'ok' ? '<span class="tag ok">✓</span>' : x.status === 'injured' ? '<span class="tag inj">🩹</span>' : '<span class="tag ko">✗</span>';
     const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
     return `<div class="entry"><div class="e-emoji">${esc(x.emoji || '')}</div><div class="e-main"><div class="e-title">${esc(x.name)}</div><div class="e-sub">${val}</div></div>${ic}</div>`;
-  }).join('') + `</div><button class="btn" data-act="close-sheet">C'est parti pour cette semaine</button>`;
+  }).join('') + `</div><button class="btn" data-act="close-sheet">${recapQueue.length ? 'Bilan suivant' : cta}</button>`;
   openSheet(h);
 }
 function markRecapSeen() {
-  const k = recapOpenFor; recapOpenFor = null;
-  const w = state.weeks[k]; if (!w || w.recapSeen) return;
-  const doc = clone(w); doc.recapSeen = true; saveWeek(k, doc);
+  const { p, k } = recapOpenFor; recapOpenFor = null;
+  const pr = clone(state.profile);
+  pr.recaps = Object.assign({}, pr.recaps || {}, { [p]: k });
+  saveProfile(pr);
+  if (recapQueue.length) setTimeout(() => { if (!sheetOpen()) openRecap(recapQueue.shift()); }, 380);
 }
 
 /* ============ actions ============ */
@@ -1198,9 +1343,9 @@ const ACTIONS = {
     const first = ($('#su-first').value || '').trim(), last = ($('#su-last').value || '').trim();
     if (!first || !last) { toast('Indique ton prénom et ton nom 🙂'); return; }
     const cur = curWeek();
-    const mk = (o, t) => Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
+    const mk = (o, t) => Object.assign({ id: rid(), period: 'week', createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
     const p = Object.assign(clone(state.profile), { firstName: first, lastName: last, name: first, startWeek: cur });
-    state.phase = 'app'; tab = 'semaine';
+    state.phase = 'app'; tab = 'resolutions';
     saveProfile(p);
     saveGoals([
       mk({ name: 'Lire', emoji: '📖', cat: 'reading', type: 'quantity', unit: 'pages', activities: [], distance: false }, 100),
@@ -1235,8 +1380,9 @@ const ACTIONS = {
     const f = el.dataset.field, v = el.dataset.val;
     if (goalDraft[f] === v) return;
     goalDraft[f] = v;
+    if (goalDraft.type === 'daily' && !dailyMax(goalDraft.period)) goalDraft.type = 'count';
     goalDraft.unit = defaultUnit(goalDraft.type, goalDraft.cat);
-    if (goalDraft.type === 'daily' && goalDraft.target > 7) goalDraft.target = 7;
+    if (goalDraft.type === 'daily' && goalDraft.target > dailyMax(goalDraft.period)) goalDraft.target = dailyMax(goalDraft.period);
     if (f === 'cat' && v === 'reading' && goalDraft.type === 'count') { goalDraft.type = 'quantity'; goalDraft.unit = 'pages'; goalDraft.target = Math.max(goalDraft.target, 50); }
     renderGoalEditor();
   },
@@ -1244,15 +1390,17 @@ const ACTIONS = {
     readGoalForm();
     const t = goalDraft.target, inc = +el.dataset.val * (t >= 50 ? 10 : 1);
     goalDraft.target = Math.max(1, t + inc);
-    if (goalDraft.type === 'daily') goalDraft.target = Math.min(7, goalDraft.target);
+    if (goalDraft.type === 'daily') goalDraft.target = Math.min(dailyMax(goalDraft.period), goalDraft.target);
     $('#ge-target').value = goalDraft.target;
   },
   'toggle-injury': () => toggleInjury(),
   'archive-goal': () => archiveGoal(),
   'save-goal': () => saveGoal(),
+  'period': el => { period = el.dataset.val; render(); window.scrollTo(0, 0); },
+  'hist-period': el => { histPeriod = el.dataset.val; render(); window.scrollTo(0, 0); },
   'move-goal': el => {
-    const cur = curWeek(), items = clone(goalsList());
-    const vis = items.filter(g => !g.archivedWeek || cur < g.archivedWeek);
+    const items = clone(goalsList()), me = items.find(g => g.id === el.dataset.id);
+    const vis = items.filter(g => !isArchived(g) && periodOf(g) === periodOf(me));
     const i = vis.findIndex(g => g.id === el.dataset.id), j = i + +el.dataset.dir;
     if (j < 0 || j >= vis.length) return;
     const a = items.indexOf(vis[i]), b = items.indexOf(vis[j]);
@@ -1261,7 +1409,7 @@ const ACTIONS = {
   },
   'restore-goal': el => {
     const items = clone(goalsList()), g = items.find(x => x.id === el.dataset.id);
-    g.archivedWeek = null; if (g.createdWeek > curWeek()) g.createdWeek = curWeek();
+    g.archivedWeek = null; if (g.createdWeek > periodStart(periodOf(g))) g.createdWeek = periodStart(periodOf(g));
     saveGoals(items); toast('Objectif restauré');
   },
   'edit-profile': () => openProfileEditor(),
@@ -1324,10 +1472,10 @@ document.addEventListener('keydown', e => {
 });
 window.flfBack = () => {
   if (sheetOpen()) { closeSheet(); return true; }
-  if (state.profile && tab !== 'semaine') { tab = 'semaine'; render(); window.scrollTo(0, 0); return true; }
+  if (state.profile && tab !== 'resolutions') { tab = 'resolutions'; render(); window.scrollTo(0, 0); return true; }
   return false;
 };
-window.flfResume = () => { lastWeekSeen = curWeek(); reloadData(false); };
+window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false); };
 window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
 window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
@@ -1352,7 +1500,7 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
     else if (user) state.user = user;
     else if (!user && state.user) {
       Object.assign(state, { user: null, profile: null, goals: null, weeks: {}, phase: 'auth', legacy: null });
-      authMode = 'login'; tab = 'semaine'; render();
+      authMode = 'login'; tab = 'resolutions'; render();
     }
   });
   if (IS_APP) {

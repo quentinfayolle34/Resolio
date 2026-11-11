@@ -1,6 +1,6 @@
 # Resolio — notes pour Claude
 
-Application mobile d'objectifs hebdomadaires, en **français**. Projet **Capacitor 8** (Android aujourd'hui, iOS prévu).
+Application mobile de résolutions par jour / semaine / mois / année, en **français**. Projet **Capacitor 8** (Android aujourd'hui, iOS prévu).
 
 ## Architecture
 - Toute l'app est dans `www/index.html` : HTML + CSS + JavaScript vanilla, **sans bundler ni framework**. Garder ce choix sauf demande explicite.
@@ -14,8 +14,11 @@ Application mobile d'objectifs hebdomadaires, en **français**. Projet **Capacit
 - Tout l'accès serveur passe par l'objet `backend` (`createSupabaseBackend()`), interface : auth (`signIn`, `signUp`, `signInGoogle`, `handleDeepLink`, `resetPassword`, `updatePassword`, `signOut`, `deleteAccount`) + données (`loadAll`, `saveProfile`, `uploadAvatar`, `upsertGoals`, `upsertWeeks`, `insertEntries`, `deleteEntries`, `replaceAllData`). Les tests remplacent cet objet par `window.__RESOLIO_TEST_BACKEND__`.
 - État en mémoire (`state.profile`, `state.goals`, `state.weeks`) chargé par `loadData()`. Écritures : `saveGoals` / `saveWeek` / `saveProfile` mettent à jour l'écran puis envoient via `write()` (file d'attente ; en cas d'échec : message + rechargement depuis la base). `saveWeek` calcule les enregistrements ajoutés/supprimés.
 - `state.phase` : `loading` | `config` | `auth` | `offline` | `setup` (compte sans objectifs) | `app`.
-- Les semaines commencent le **lundi** (clé = date du lundi, heure locale). `maintenance()` clôture les semaines passées (`upsertWeeks`).
-- Un changement d'objectif chiffré s'ajoute à `targetHistory` à partir de la semaine en cours ; les semaines clôturées gardent leur bilan.
+- **Périodes** : `g.period` = `day` | `week` | `month` | `year` (défaut `week`), fixée à la création. Une période = sa date de début (jour, lundi, 1er du mois, 1er janvier) : `periodStart` / `periodNext` / `periodPrev`. `createdWeek`, `archivedWeek`, `targetHistory[].from`, `injuries[]` contiennent des débuts de période de l'objectif (noms hérités).
+- Les enregistrements restent rangés par semaine (`state.weeks[lundi].entries`, colonne `entries.week`) ; `entriesBetween(a, b)` les récupère pour n'importe quelle période ; `computePeriod(p, start, entries)` calcule le bilan.
+- Type `daily` (« chaque jour ») : seulement pour les périodes semaine (max 7) et mois (max 31).
+- `maintenance()` : clôture les semaines passées (`weeks.result` = résolutions hebdo seulement) puis affiche les **bilans de fin de période** (jour, semaine, mois, année) non encore vus, mémorisés dans `profile.recaps[p]` (colonne `profiles.recaps`).
+- Un changement d'objectif chiffré s'ajoute à `targetHistory` à partir de la période en cours ; les périodes passées gardent leur chiffre.
 - Schéma : `supabase/migrations/*.sql` (tables `profiles`, `goals`, `weeks`, `entries`, bucket `avatars`, RLS « chacun ses lignes », fonction `delete_my_account`). Nouveau champ = nouvelle migration + conversions `xxxToRow` / `xxxFromRow`.
 - Connexion Google / liens email : PKCE, retour par le lien `com.quentinfayolle.resolio://auth-callback` (ou `://reset-password`) déclaré dans `AndroidManifest.xml`.
 - Les données de l'ancienne version locale (clé Preferences `resolio-v1`) sont proposées à l'import au premier lancement d'un compte vide.

@@ -2,11 +2,11 @@
 
 **Tes objectifs de la semaine. Pas d'excuses.**
 
-Resolio est une application mobile d'objectifs hebdomadaires : lire 100 pages, faire 3 séances de cardio, 3 séances de musculation… Chaque lundi à minuit, la semaine se clôture et un bilan indique si elle est validée.
+Resolio est une application mobile de résolutions **par jour, semaine, mois ou année** : boire 2 L d'eau par jour, lire 100 pages et faire 3 séances de sport par semaine, lire 400 pages par mois… À la fin de chaque période (minuit, dimanche minuit, fin du mois, 31 décembre), un bilan indique si elle est validée.
 
-- **Semaine** : progression de chaque objectif, journal des séances et lectures (livre, activité, durée, distance).
-- **Objectifs** : modifier les chiffres, en ajouter (nombre de fois, quantité, chaque jour, une fois), pause blessure, archivage.
-- **Historique** : chaque semaine passée, validée ou non.
+- **Résolutions** : onglets Jour / Semaine / Mois / Année (seuls ceux qui ont des résolutions s'affichent), progression, journal des séances et lectures (livre, activité, durée, distance).
+- **Objectifs** : nouvelle résolution (période, catégorie, type : nombre de fois, quantité, chaque jour, une fois), modifier les chiffres, pause blessure, archivage.
+- **Historique** : chaque jour / semaine / mois / année passé, validé ou non, séries et records.
 - **Profil** : nom, prénom, photo, email, date de naissance et ville (facultatifs), séries, totaux, badges.
 - **Compte** : connexion par email + mot de passe ou avec Google, mot de passe oublié, suppression du compte.
 

@@ -5,7 +5,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 
 - Projet : `https://dtvmkqeohhlwwviphnkz.supabase.co`
 - Config de l'app : [`www/config.js`](../www/config.js) (URL + clé *publishable*, publiques)
-- Schéma : [`migrations/20261111200000_resolio_init.sql`](migrations/20261111200000_resolio_init.sql)
+- Schéma : les fichiers de [`migrations/`](migrations/), à exécuter **dans l'ordre**
 
 > 🔒 Ne mets **jamais** la clé `service_role` / `secret` ni le mot de passe de la base dans l'app ou sur GitHub.
 
@@ -15,13 +15,14 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 
 1. Supabase → ton projet → **SQL Editor** → **New query**.
 2. Copie tout le contenu de `migrations/20261111200000_resolio_init.sql`, colle-le, clique sur **Run**.
+3. Nouvelle requête : fais pareil avec `migrations/20261111220000_resolio_periods.sql` (résolutions jour / semaine / mois / année + bilans).
 3. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** le bucket `avatars`.
 
 | Table | Contenu |
 | --- | --- |
-| `profiles` | Prénom, nom, photo, date de naissance, ville, semaine de départ (1 ligne par compte, créée automatiquement) |
-| `goals` | Objectifs (nom, emoji, catégorie, type, unité, historique des chiffres, pauses blessure, archivage) |
-| `weeks` | Une ligne par semaine : clôturée, bilan, bilan vu |
+| `profiles` | Prénom, nom, photo, date de naissance, ville, semaine de départ, derniers bilans vus (1 ligne par compte, créée automatiquement) |
+| `goals` | Résolutions : période (jour / semaine / mois / année), nom, emoji, catégorie, type, unité, historique des chiffres, pauses blessure, archivage |
+| `weeks` | Une ligne par semaine : clôturée, bilan des résolutions hebdomadaires |
 | `entries` | Chaque séance / lecture / jour coché |
 
 Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Les photos sont rangées dans `avatars/<id utilisateur>/`.
