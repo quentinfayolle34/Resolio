@@ -1,22 +1,36 @@
 # Resolio — notes pour Claude
 
-Application mobile d'objectifs hebdomadaires, en **français**. Projet **Capacitor 8** (Android aujourd'hui, iOS prévu).
+Application mobile de résolutions par jour / semaine / mois / année, en **français**. Projet **Capacitor 8** (Android aujourd'hui, iOS prévu).
 
 ## Architecture
 - Toute l'app est dans `www/index.html` : HTML + CSS + JavaScript vanilla, **sans bundler ni framework**. Garder ce choix sauf demande explicite.
-- Les plugins Capacitor sont appelés sans import : `plugin('Preferences')`, `plugin('App')`, `plugin('Share')`, `plugin('Filesystem')` (helper défini en haut du script, basé sur `window.Capacitor`). Un plugin ajouté doit aussi être installé avec npm puis `npx cap sync`.
-- `IS_APP` est vrai dans l'app native ; dans le navigateur (`npm run dev`), le stockage bascule sur `localStorage` : l'app doit toujours fonctionner dans les deux cas.
-- Stockage : un seul objet JSON `{ profile, goals: { items }, weeks: { 'YYYY-MM-DD': { week, entries, closed, result, recapSeen } } }` sous la clé `resolio-v1`. Toute évolution du format doit rester compatible avec les données existantes et les sauvegardes exportées.
-- Les semaines commencent le **lundi** (clé = date du lundi, heure locale). `maintenance()` clôture les semaines passées et calcule `result`.
-- Un changement d'objectif chiffré s'ajoute à `targetHistory` à partir de la semaine en cours ; les semaines clôturées gardent leur snapshot.
+- Les plugins Capacitor sont appelés sans import : `plugin('Preferences')`, `plugin('App')`, `plugin('Browser')`, `plugin('Share')`, `plugin('Filesystem')` (helper basé sur `window.Capacitor`). Un plugin ajouté doit aussi être installé avec npm puis `npx cap sync`.
+- `IS_APP` est vrai dans l'app native ; dans le navigateur (`npm run dev`) tout doit aussi fonctionner.
 
-## Synchronisation (serveur PocketBase, dossier `server/`)
-- Le téléphone reste la source de vérité au quotidien ; la synchro est un bonus (l'app doit toujours marcher hors ligne / sans compte).
-- État dans `state.sync` (persisté sous `blob.sync`) : url, token, `dirty` (profil / objectifs / clés de semaines à envoyer), `srv` (id local -> id serveur), `lastPull`.
-- Toute écriture passe par `saveGoals` / `saveWeek` / `saveProfile` (ou `store.save` + `markDirty` dans `maintenance()`), qui marquent les données à envoyer. Les données reçues du serveur sont écrites avec `store.save` SANS `markDirty`.
-- `runSync()` : rafraîchit le token, `pushAll()` puis `pullAll()` (enregistrements `updated >= lastPull`). Les séances retirées sont marquées `deleted = true` côté serveur, jamais supprimées.
-- Schéma : `server/pb_migrations/*.js` (tables `goals`, `weeks`, `entries` + champ `users.start_week`), règles "chaque utilisateur ne voit que ses données". Un nouveau champ = une nouvelle migration + mise à jour de `goalToRec`/`recToGoal`/`entryToRec`/`recToEntry`.
-- Tester : lancer PocketBase (`cd server && docker compose up -d --build`, ou le binaire avec `--migrationsDir=server/pb_migrations`) puis `npm run dev`.
+## Données : Supabase uniquement (dossier `supabase/`)
+- L'app est **100 % en ligne** : aucune donnée métier stockée sur le téléphone (seule la session Supabase, via Preferences). Ne pas réintroduire de stockage local des données.
+- Config publique dans `www/config.js` (URL + clé publishable). Jamais de clé `service_role`/`secret` dans le dépôt.
+- Bibliothèque : `www/vendor/supabase.js` (UMD, `window.supabase`), mise à jour par `npm run vendor`.
+- Tout l'accès serveur passe par l'objet `backend` (`createSupabaseBackend()`), interface : auth (`signIn`, `signUp`, `signInGoogle`, `handleDeepLink`, `resetPassword`, `updatePassword`, `signOut`, `deleteAccount`) + données (`loadAll`, `saveProfile`, `addUserSport`, `upsertScreenTime`, `uploadAvatar`, `upsertGoals`, `upsertWeeks`, `insertEntries`, `deleteEntries`, `replaceAllData`) + amis (`loadSocial`, `loadPosts`, `findByCode`, `requestFriend`, `acceptFriend`, `removeFriendship`, `uploadPostPhoto`, `createPost`, `deletePost`, `setPostLike`, `publishResult`, `loadResults`, `setResultLike`, `savePublicStats`). Les tests remplacent cet objet par `window.__RESOLIO_TEST_BACKEND__`.
+- État en mémoire (`state.profile`, `state.goals`, `state.weeks`) chargé par `loadData()`. Écritures : `saveGoals` / `saveWeek` / `saveProfile` mettent à jour l'écran puis envoient via `write()` (file d'attente ; en cas d'échec : message + rechargement depuis la base). `saveWeek` calcule les enregistrements ajoutés/supprimés.
+- `state.phase` : `loading` | `config` | `auth` | `offline` | `setup` (configuration pas terminée : `profile.startWeek` vide) | `app`.
+- Premier lancement (`viewSetup`) : prénom / nom puis l'utilisateur ajoute **lui-même** ses résolutions (aucune résolution par défaut) ; « C'est parti » exige au moins une résolution et enregistre `startWeek`.
+- **Périodes** : `g.period` = `day` | `week` | `month` | `year` (défaut `week`), fixée à la création. Une période = sa date de début (jour, lundi, 1er du mois, 1er janvier) : `periodStart` / `periodNext` / `periodPrev`. `createdWeek`, `archivedWeek`, `targetHistory[].from`, `injuries[]` contiennent des débuts de période de l'objectif (noms hérités).
+- Les enregistrements restent rangés par semaine (`state.weeks[lundi].entries`, colonne `entries.week`) ; `entriesBetween(a, b)` les récupère pour n'importe quelle période ; `computePeriod(p, start, entries)` calcule le bilan.
+- **Catégories** (`g.cat`) : `reading`, `sport` (sous-type `any`/`cardio`/`muscu` + sports choisis dans `g.activities`), `meditation`, `reduce` (sous-type `alcohol`/`cigarette`, `isLimit` : maximum à ne pas dépasser), `other`.
+- **Mesures** (`g.metrics`, voir `metricsOf`) : `count`, `time` (min), `distance` (km), `pages`, `quantity`, `days`, `once`, `limit`. Lecture et sport : plusieurs mesures possibles ; objectifs chiffrés par mesure dans `targetHistory[].targets` (`targetsFor`). Une résolution est tenue quand toutes ses mesures sont atteintes (`evalGoal`), ou pour `limit` non dépassées. Les anciennes résolutions sans `metrics` sont déduites de `type`.
+- **Temps d'écran** (`cat: 'screen'`, mesure `limit` en minutes, sous-type `total`/`categories`/`apps`, sélection dans `g.activities`) : lu sur le téléphone par le module natif `android/.../ScreenTimePlugin.java` (`plugin('ScreenTime')` : `hasPermission`, `openSettings`, `getDailyUsage({ days })`, à partir de `UsageStatsManager.queryEvents`), enregistré par appli et par jour dans `public.screen_time`, chargé dans `state.screen[date]`. `syncScreenTime()` tourne au chargement (avant les bilans) et au retour dans l'app. iOS : pas d'équivalent (API Screen Time d'Apple fermée). Tests : `window.__SCREEN_TIME_TEST__` remplace le module.
+- **Sports** : liste commune `public.sports` (lecture seule) + sports perso `public.user_sports` (privés), fusionnés dans `state.sports` (`mergeSports`), ajout via `backend.addUserSport`.
+- **Badges** : 12 badges (`BADGES`), 5 niveaux chacun (`TIERS` : Bronze, Argent, Or, Platine, Diamant), seuils dans `steps`, valeur calculée par `computeStats()` ; `badgeLevel()` donne le niveau et la progression. « Livre terminé » = `entry.finished` (colonne `entries.book_finished`).
+- Type `daily` (« chaque jour », catégorie Autre) : seulement pour les périodes semaine (max 7) et mois (max 31).
+- `maintenance()` : clôture les semaines passées (`weeks.result` = résolutions hebdo seulement) puis affiche les **bilans de fin de période** (jour, semaine, mois, année) non encore vus, mémorisés dans `profile.recaps[p]` (colonne `profiles.recaps`).
+- Un changement d'objectif chiffré s'ajoute à `targetHistory` à partir de la période en cours ; les périodes passées gardent leur chiffre.
+- Schéma : `supabase/migrations/*.sql` (tables `profiles`, `goals`, `weeks`, `entries`, `sports`, `user_sports`, `screen_time`, `friendships`, `posts`, `post_likes`, `period_results`, `result_likes`, buckets `avatars` et `posts`, RLS « chacun ses lignes » + lecture par les amis, fonction `delete_my_account`) ; `supabase/reset.sql` pour tout effacer. Nouveau champ = nouvelle migration + conversions `xxxToRow` / `xxxFromRow`.
+- Connexion Google / liens email : PKCE, retour par le lien `com.quentinfayolle.resolio://auth-callback` (ou `://reset-password`) déclaré dans `AndroidManifest.xml`.
+- **Amis** (onglet `amis`, ouvert par défaut) : module `social` (`loadSocial`, `viewFriends`, `openFriendsSheet`, `openFriendProfile`). Tables `friendships` (pending/accepted, `is_friend()`), `posts` + `post_likes`, `period_results` + `result_likes` ; RPC `find_user_by_code`, `my_social_profiles` (stats publiques seulement si amis). `profiles.friend_code` (ex. `QUEN-8D5F`, immuable), `public_stats` (série + niveaux de badges, `publishPublicStats`).
+  - Deux partages distincts : `g.shared` (éditeur de résolution, Public par défaut, Privé pour `reduce`/`screen`, pas pour `day`) = visible dans la rétrospective ; `entryDraft.share` (saisie) = publication dans le fil via `publishEntry` (cases cochées aussi). `reduce` n'est jamais publié (contrôle aussi en base).
+  - Rétrospective (semaine/mois/année) : `publishResults()` envoie le bilan de la période terminée (résolutions partagées seulement, rien si aucune), mémorisé dans `profile.retroPublished`. `maybeAutoRetro()` l'ouvre en plein écran (`#retro`, `renderRetro`) après les bilans perso, si des amis ont publié, une seule fois (`profile.retroSeen`) et dans les 3 jours. Les sous-onglets Semaine/Mois/Année (`openRetroFor`) montrent toujours la dernière.
+- Les données de l'ancienne version locale (clé Preferences `resolio-v1`) sont proposées à l'import au premier lancement d'un compte vide.
 
 ## Style
 - Thème sombre, jaune `#f5c518` utilisé avec parcimonie (accent seulement). Polices Archivo (titres) + Inter (texte), embarquées dans `www/fonts`.
@@ -24,7 +38,7 @@ Application mobile d'objectifs hebdomadaires, en **français**. Projet **Capacit
 - Textes d'interface en français, ton direct et motivant, tutoiement.
 
 ## Commandes
-- `npm run dev` : tester dans le navigateur (http://localhost:5173)
+- `npm run dev` : tester dans le navigateur (http://localhost:5173) — URL à autoriser dans Supabase
 - `npx cap sync android` : copier `www/` dans le projet Android après une modification
 - `npm run android` : ouvrir dans Android Studio
 - Icônes : `python3 scripts/generate-icons.py`

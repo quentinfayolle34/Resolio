@@ -2,15 +2,16 @@
 
 **Tes objectifs de la semaine. Pas d'excuses.**
 
-Resolio est une application mobile d'objectifs hebdomadaires : lire 100 pages, faire 3 séances de cardio, 3 séances de musculation… Chaque lundi à minuit, la semaine se clôture et un bilan indique si elle est validée.
+Resolio est une application mobile de résolutions **par jour, semaine, mois ou année** : boire 2 L d'eau par jour, lire 100 pages et faire 3 séances de sport par semaine, lire 400 pages par mois… À la fin de chaque période (minuit, dimanche minuit, fin du mois, 31 décembre), un bilan indique si elle est validée.
 
-- **Semaine** : progression de chaque objectif, journal des séances et lectures (livre, activité, durée, distance).
-- **Objectifs** : modifier les chiffres, en ajouter (nombre de fois, quantité, chaque jour, une fois), pause blessure, archivage.
-- **Historique** : chaque semaine passée, validée ou non.
-- **Profil** : prénom, photo, séries de semaines validées, totaux, badges, compte, sauvegarde / restauration.
+- **Résolutions** : onglets Jour / Semaine / Mois / Année (seuls ceux qui ont des résolutions s'affichent), progression, journal des séances et lectures (livre, activité, durée, distance).
+- **Objectifs** : nouvelle résolution (période ; catégorie Lecture, Sport, Méditation, Réduire ou Autre ; une ou plusieurs mesures : nombre de fois, temps, distance, pages ; maximum à ne pas dépasser pour Réduire ; **Temps d'écran** relevé automatiquement sur Android : tout le téléphone, catégories ou applications), modifier les chiffres, pause blessure, archivage.
+- **Historique** : chaque jour / semaine / mois / année passé, validé ou non, séries et records.
+- **Profil** : nom, prénom, photo, email, date de naissance et ville (facultatifs), séries, totaux, 12 badges à 5 niveaux (Bronze → Diamant).
+- **Amis** (onglet ouvert au démarrage) : ajout par **code ami** unique avec demande à accepter, fil d'activité (tes saisies « Public » et celles de tes amis, note, photo prise ou importée, likes, tout l'historique), profil d'ami (photo, séries, badges). À la fin de chaque semaine, mois et année : **rétrospective** en carrousel plein écran (toi d'abord, puis ceux qui ont réussi en jaune, puis les autres en rouge, avec likes) ; chaque résolution peut être **Public** ou **Privé** pour la rétrospective.
+- **Compte** : connexion par email + mot de passe ou avec Google, mot de passe oublié, suppression du compte.
 
-Les données sont enregistrées sur le téléphone (stockage natif via `@capacitor/preferences`) : l'app marche hors ligne.
-Avec un **compte Resolio**, elles sont aussi synchronisées avec ton serveur (PocketBase) et retrouvées sur tous tes appareils → voir **[server/README.md](server/README.md)**.
+Toutes les données sont dans une base **Supabase** (une seule base pour tous les comptes, chacun ne voit que ses données) : l'app a besoin d'internet et tu retrouves tout sur n'importe quel téléphone → voir **[supabase/README.md](supabase/README.md)**.
 
 ---
 
@@ -29,7 +30,9 @@ www/                      Code de l'application (HTML / CSS / JavaScript, sans f
   index.html              Toute l'application : écrans, logique, stockage
   fonts/                  Polices Archivo + Inter embarquées (fonctionne hors ligne)
 android/                  Projet Android natif généré par Capacitor
-server/                   Serveur (PocketBase dans Docker) : base de données + comptes
+  config.js               Adresse + clé publique de la base Supabase
+  vendor/supabase.js      Bibliothèque Supabase (copiée depuis node_modules : npm run vendor)
+supabase/                 Base de données : schéma SQL + guide de configuration (Google, emails…)
 capacitor.config.json     Configuration Capacitor (nom, identifiant, barres système)
 scripts/generate-icons.py Génère l'icône (cible jaune) et l'écran de démarrage
 resources/icon.png        Icône source 1024×1024
@@ -116,4 +119,4 @@ npx cap open ios   # nécessite un Mac avec Xcode
 
 Il faudra aussi un compte **Apple Developer** (≈ 99 €/an) pour installer l'app durablement et la partager via **TestFlight**. La fabrication peut aussi se faire sur GitHub Actions (machines macOS).
 
-⚠️ L'iPhone refuse les connexions en `http` : le serveur devra être en **https** (voir [server/README.md](server/README.md), section 6).
+Pour la connexion Google et les liens des emails, il faudra déclarer le schéma `com.quentinfayolle.resolio` dans Xcode (*URL Types*).
