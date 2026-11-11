@@ -454,7 +454,7 @@ async function loadData() {
   try {
     const d = await backend.loadAll(state.user);
     Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
-    state.phase = (d.goals.length || d.profile.startWeek) ? 'app' : 'setup';
+    state.phase = d.profile.startWeek ? 'app' : 'setup';
     if (state.phase === 'setup') state.legacy = await readLegacyData();
   } catch (e) {
     console.error(e);
@@ -469,7 +469,7 @@ async function reloadData(force) {
     const d = await backend.loadAll(state.user);
     if (!force && pendingWrites) return;
     Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks });
-    if (state.phase === 'offline') state.phase = (d.goals.length || d.profile.startWeek) ? 'app' : 'setup';
+    if (state.phase === 'offline') state.phase = d.profile.startWeek ? 'app' : 'setup';
     render(); maintenance();
   } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
 }
@@ -814,26 +814,33 @@ function render() {
 }
 
 // Premier lancement d'un compte : prénom / nom + objectifs de départ (ou import des anciennes données)
+// Premier lancement : prénom / nom, puis l'utilisateur ajoute LUI-MÊME ses résolutions (aucune par défaut)
+const setupDraft = { first: null, last: null };
 function viewSetup() {
   const p = state.profile || {};
+  if (setupDraft.first === null) { setupDraft.first = p.firstName || ''; setupDraft.last = p.lastName || ''; }
+  const goals = goalsList().filter(g => !isArchived(g));
   const legacy = state.legacy ? `<div class="card" style="padding:16px;margin-bottom:22px;border:1px solid rgba(245,197,24,.35)">
       <div style="font-weight:700;margin-bottom:4px">Tu as des données sur ce téléphone 📱</div>
       <div class="muted" style="font-size:13.5px;margin-bottom:12px">Récupère tes objectifs, séances et ton historique de l'ancienne version dans ton compte.</div>
       <button class="btn" data-act="import-legacy">Importer mes données</button></div>` : '';
-  return `<div class="onb">
+  const list = goals.length
+    ? `<div class="card" style="padding:4px 16px;margin-bottom:12px">` + goals.map(g => `<div class="entry" data-act="edit-goal" data-id="${g.id}" style="cursor:pointer">
+        <div class="e-emoji">${esc(g.emoji || '🎯')}</div><div class="e-main"><div class="e-title">${esc(g.name)}</div><div class="e-sub">${goalLine(g)}</div></div>
+        <span class="tag">${P[periodOf(g)].tab}</span></div>`).join('') + `</div>`
+    : `<div class="empty" style="margin-bottom:12px;padding:20px 14px">Aucune résolution pour l'instant.<br>Par jour, par semaine, par mois ou par an : à toi de choisir.</div>`;
+  return `<div class="onb" style="justify-content:flex-start;padding-top:6vh">
     <div class="logo">Resoli<span>o</span></div>
-    <p>Bienvenue${p.firstName ? ' ' + esc(p.firstName) : ''} ! On prépare ta première semaine.</p>
+    <p>Bienvenue${setupDraft.first ? ' ' + esc(setupDraft.first) : ''} ! Configure tes résolutions.</p>
     ${legacy}
-    <div class="row"><div class="field"><label>Prénom</label><input class="inp" id="su-first" autocomplete="given-name" value="${esc(p.firstName || '')}"></div>
-      <div class="field"><label>Nom</label><input class="inp" id="su-last" autocomplete="family-name" value="${esc(p.lastName || '')}"></div></div>
-    <div class="lbl">Tes objectifs pour commencer</div>
-    <div class="defaults">
-      <div><span>📖</span><span>Lire <b>100 pages</b></span></div>
-      <div><span>🏃</span><span><b>3 séances</b> de cardio (course, natation)</span></div>
-      <div><span>🏋️</span><span><b>3 séances</b> de musculation</span></div>
-    </div>
-    <button class="btn" data-act="start">C'est parti</button>
-    <div class="hint" style="text-align:center;margin-top:12px">Tu pourras les modifier et en ajouter d'autres.</div>
+    <div class="lbl">1. Toi</div>
+    <div class="row"><div class="field"><label>Prénom</label><input class="inp" id="su-first" autocomplete="given-name" value="${esc(setupDraft.first)}"></div>
+      <div class="field"><label>Nom</label><input class="inp" id="su-last" autocomplete="family-name" value="${esc(setupDraft.last)}"></div></div>
+    <div class="lbl" style="margin-top:8px">2. Tes résolutions</div>
+    ${list}
+    <button class="btn ghost" data-act="new-goal" style="margin-bottom:22px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Ajouter une résolution</button>
+    <button class="btn" data-act="start" ${goals.length ? '' : 'style="opacity:.45"'}>C'est parti</button>
+    <div class="hint" style="text-align:center;margin-top:12px">${goals.length ? 'Tu pourras en ajouter ou les modifier à tout moment.' : 'Ajoute au moins une résolution pour commencer.'}</div>
     <button class="link-btn" data-act="logout" style="display:block;margin:22px auto 0">Se déconnecter</button>
   </div>`;
 }
@@ -1138,7 +1145,7 @@ function readGoalForm() {
 }
 function renderGoalEditor() {
   const d = goalDraft;
-  let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvel objectif' : 'Modifier l\'objectif'}</div></div>`;
+  let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvelle résolution' : 'Modifier la résolution'}</div></div>`;
   h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="ex. Méditer" maxlength="40"></div>
     <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
   h += d._new
@@ -1186,7 +1193,7 @@ function saveGoal() {
       g.targetHistory.sort((a, b) => a.from < b.from ? -1 : 1);
     }
   }
-  closeSheet(); saveGoals(items); toast(d._new ? 'Objectif ajouté' : 'Objectif mis à jour');
+  closeSheet(); saveGoals(items); toast(d._new ? 'Résolution ajoutée' : 'Résolution mise à jour');
 }
 function toggleInjury() {
   readGoalForm();
@@ -1339,19 +1346,16 @@ function markRecapSeen() {
 /* ============ actions ============ */
 const ACTIONS = {
   'tab': el => { tab = el.dataset.tab; history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
-  'start': async () => {
-    const first = ($('#su-first').value || '').trim(), last = ($('#su-last').value || '').trim();
+  'start': () => {
+    const first = (setupDraft.first || '').trim(), last = (setupDraft.last || '').trim();
     if (!first || !last) { toast('Indique ton prénom et ton nom 🙂'); return; }
-    const cur = curWeek();
-    const mk = (o, t) => Object.assign({ id: rid(), period: 'week', createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
-    const p = Object.assign(clone(state.profile), { firstName: first, lastName: last, name: first, startWeek: cur });
-    state.phase = 'app'; tab = 'resolutions';
+    const goals = goalsList().filter(g => !isArchived(g));
+    if (!goals.length) { toast('Ajoute au moins une résolution'); return; }
+    const p = Object.assign(clone(state.profile), { firstName: first, lastName: last, name: first, startWeek: state.profile.startWeek || curWeek() });
+    state.phase = 'app'; tab = 'resolutions'; setupDraft.first = null;
+    period = PERIODS.find(x => goals.some(g => periodOf(g) === x));
     saveProfile(p);
-    saveGoals([
-      mk({ name: 'Lire', emoji: '📖', cat: 'reading', type: 'quantity', unit: 'pages', activities: [], distance: false }, 100),
-      mk({ name: 'Cardio', emoji: '🏃', cat: 'sport', type: 'count', unit: 'séances', activities: ['Course', 'Natation'], distance: true }, 3),
-      mk({ name: 'Musculation', emoji: '🏋️', cat: 'sport', type: 'count', unit: 'séances', activities: [], distance: false }, 3),
-    ]);
+    toast("C'est parti, " + first + ' ! 🔥');
   },
   'import-legacy': async el => {
     if (!state.legacy) return;
@@ -1466,6 +1470,10 @@ document.addEventListener('change', async e => {
     catch (err) { toast('Impossible de lire cette image'); }
   }
 });
+document.addEventListener('input', e => {
+  if (e.target.id === 'su-first') setupDraft.first = e.target.value;
+  if (e.target.id === 'su-last') setupDraft.last = e.target.value;
+});
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'au-pw') authAction(authMode === 'signup' ? 'signup' : 'login');
   if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('en-') && e.target.id !== 'en-book') { e.preventDefault(); saveEntry(); }
@@ -1500,7 +1508,7 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
     else if (user) state.user = user;
     else if (!user && state.user) {
       Object.assign(state, { user: null, profile: null, goals: null, weeks: {}, phase: 'auth', legacy: null });
-      authMode = 'login'; tab = 'resolutions'; render();
+      authMode = 'login'; tab = 'resolutions'; setupDraft.first = null; render();
     }
   });
   if (IS_APP) {
