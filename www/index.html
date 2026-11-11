@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0f">
+<title>Resolio</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{
+  --bg:#0d0d0f; --surface:#17171a; --surface2:#212125; --line:#2b2b31;
+  --text:#f3f3ef; --muted:#8e8e96; --dim:#5d5d65;
+  --accent:#f5c518; --accent-ink:#1c1600; --accent-soft:rgba(245,197,24,.12);
+  --ko:#e0675d; --ko-soft:rgba(224,103,93,.12); --inj:#7d9cc9; --inj-soft:rgba(125,156,201,.12);
+  --r:18px;
+  --safe-t:var(--safe-area-inset-top,env(safe-area-inset-top,0px)); --safe-b:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.4}
+body{min-height:100vh;padding-top:var(--safe-t)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+.muted{color:var(--muted)}
+#app{max-width:520px;margin:0 auto;padding:12px 18px calc(96px + var(--safe-b))}
+.brand{font-family:Archivo,sans-serif;font-weight:900;letter-spacing:-.02em;font-size:20px;display:flex;align-items:center;gap:8px;padding:8px 0 6px}
+.brand .dot{width:9px;height:9px;border-radius:3px;background:var(--accent);transform:rotate(45deg)}
+.brand .sync{margin-left:auto;font-family:Inter;font-weight:500;font-size:12px;color:var(--muted)}
+h1{font-family:Archivo,sans-serif;font-weight:800;font-size:30px;letter-spacing:-.02em;margin:2px 0 0}
+h2{font-family:Archivo,sans-serif;font-weight:800;font-size:18px;margin:28px 0 12px;letter-spacing:-.01em}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;margin-top:14px}
+
+/* summary */
+.summary{display:flex;align-items:center;gap:16px;margin:18px 0 20px;padding:16px;background:var(--surface);border-radius:var(--r)}
+.ring{width:64px;height:64px;flex:none}
+.ring-bg{fill:none;stroke:var(--surface2);stroke-width:7}
+.ring-fg{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset .5s}
+.summary b{font-family:Archivo;font-size:22px}
+.validated-banner{margin:-6px 0 18px;padding:12px 16px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font-weight:600;display:flex;gap:8px;align-items:center}
+
+/* goal cards */
+.goal{background:var(--surface);border-radius:var(--r);padding:16px;margin-bottom:12px;border:1px solid transparent}
+.goal.done{border-color:rgba(245,197,24,.35)}
+.goal.injured{opacity:.75}
+.g-top{display:flex;align-items:center;gap:12px}
+.emoji{width:44px;height:44px;border-radius:14px;background:var(--surface2);display:grid;place-items:center;font-size:22px;flex:none}
+.g-title{flex:1;min-width:0}
+.g-name{font-weight:700;font-size:16px}
+.g-meta{color:var(--muted);font-size:13.5px;margin-top:1px}
+.g-meta b{color:var(--text);font-weight:700}
+.add{width:44px;height:44px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;flex:none;transition:transform .1s}
+.add:active{transform:scale(.92)}
+.add svg{width:22px;height:22px;stroke:var(--text)}
+.goal:not(.done) .add{background:var(--accent)}
+.goal:not(.done) .add svg{stroke:var(--accent-ink)}
+.bar{height:6px;border-radius:6px;background:var(--surface2);margin-top:14px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--text);border-radius:6px;transition:width .4s}
+.goal.done .bar i{background:var(--accent)}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--surface2);color:var(--muted)}
+.tag.ok{background:var(--accent-soft);color:var(--accent)}
+.tag.ko{background:var(--ko-soft);color:var(--ko)}
+.tag.inj{background:var(--inj-soft);color:var(--inj)}
+.days{display:flex;gap:6px;margin-top:14px}
+.day{flex:1;height:38px;border-radius:11px;background:var(--surface2);font-size:12px;font-weight:600;color:var(--muted);display:grid;place-items:center}
+.day.on{background:var(--accent);color:var(--accent-ink)}
+.day.today{outline:1.5px solid var(--dim)}
+.day[disabled]{opacity:.35}
+
+/* journal */
+.entry{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.entry:last-child{border-bottom:0}
+.entry .e-emoji{font-size:18px;width:28px;text-align:center}
+.entry .e-main{flex:1;min-width:0}
+.entry .e-title{font-weight:600;font-size:14.5px}
+.entry .e-sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.del{font-size:12.5px;color:var(--dim);padding:8px 4px;font-weight:600}
+.del.confirm{color:var(--ko)}
+.card{background:var(--surface);border-radius:var(--r);padding:4px 16px}
+.empty{color:var(--muted);text-align:center;padding:28px 12px;background:var(--surface);border-radius:var(--r);font-size:14px}
+
+/* history */
+.hist-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 6px}
+.week-row{background:var(--surface);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.week-row summary{list-style:none;display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer}
+.week-row summary::-webkit-details-marker{display:none}
+.week-row .wr-label{flex:1;font-weight:600}
+.week-row .wr-label small{display:block;color:var(--muted);font-weight:500;font-size:12.5px}
+.wr-detail{padding:0 16px 14px}
+.wr-goal{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px;border-top:1px solid var(--line)}
+.wr-goal span:last-child{color:var(--muted)}
+
+/* goals list */
+.gl-item{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r);padding:12px 12px 12px 14px;margin-bottom:10px}
+.gl-item .g-title{cursor:pointer}
+.mv{display:flex;flex-direction:column;gap:2px}
+.mv button{width:32px;height:22px;border-radius:7px;background:var(--surface2);color:var(--muted);font-size:11px}
+.mv button[disabled]{opacity:.25}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:52px;border-radius:16px;font-weight:700;font-size:15.5px;background:var(--accent);color:var(--accent-ink)}
+.btn:active{filter:brightness(.92)}
+.btn.ghost{background:var(--surface);color:var(--text);border:1px dashed var(--line)}
+.btn.quiet{background:var(--surface2);color:var(--text)}
+.btn.danger{background:none;color:var(--ko);height:44px;font-weight:600}
+.btn.danger.confirm{background:var(--ko-soft)}
+
+/* profile */
+.prof-head{display:flex;align-items:center;gap:16px;margin:16px 0 8px}
+.avatar{width:84px;height:84px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-family:Archivo;font-weight:900;font-size:34px;color:var(--accent);overflow:hidden;flex:none;border:2px solid var(--line)}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.prof-head .pn{font-family:Archivo;font-weight:800;font-size:26px;letter-spacing:-.02em}
+.edit-link{color:var(--muted);font-size:13px;font-weight:600;margin-top:4px;text-decoration:underline;text-underline-offset:3px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--surface);border-radius:16px;padding:14px}
+.stat .v{font-family:Archivo;font-weight:800;font-size:26px;letter-spacing:-.02em}
+.stat .l{color:var(--muted);font-size:12.5px;font-weight:500}
+.stat.hl .v{color:var(--accent)}
+.badges{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.badge{background:var(--surface);border-radius:16px;padding:14px 8px;text-align:center}
+.badge .b-e{font-size:28px;line-height:1.1}
+.badge .b-n{font-weight:700;font-size:12.5px;margin-top:6px}
+.badge .b-d{color:var(--muted);font-size:11px;margin-top:2px;line-height:1.3}
+.badge.locked .b-e{filter:grayscale(1);opacity:.28}
+.badge.locked .b-n{color:var(--dim)}
+.badge.got{box-shadow:inset 0 0 0 1px rgba(245,197,24,.35)}
+.foot{color:var(--dim);font-size:12.5px;text-align:center;margin-top:28px}
+
+/* nav */
+nav{position:fixed;left:0;right:0;bottom:0;background:rgba(13,13,15,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 8px calc(8px + var(--safe-b));display:flex;justify-content:center;z-index:10}
+nav .in{display:flex;max-width:520px;width:100%}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--dim);font-size:11px;font-weight:600}
+nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--text)}
+nav button.on svg{stroke:var(--accent)}
+
+/* sheet */
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+#overlay.open{opacity:1;pointer-events:auto}
+#sheet{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface);border-radius:24px 24px 0 0;padding:10px 20px calc(22px + var(--safe-b));transform:translateY(105%);transition:transform .25s cubic-bezier(.2,.8,.2,1);z-index:21;max-height:92vh;overflow-y:auto}
+#sheet.open{transform:none}
+.grab{width:40px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 14px}
+.sh-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.sh-title .t{font-family:Archivo;font-weight:800;font-size:21px;letter-spacing:-.01em}
+.field{margin-bottom:16px}
+.field label,.lbl{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em}
+.inp{width:100%;height:50px;border-radius:14px;background:var(--surface2);border:1.5px solid transparent;padding:0 14px;font-size:16px;outline:none}
+.inp:focus{border-color:var(--accent)}
+.inp.big{height:64px;font-family:Archivo;font-weight:800;font-size:28px;text-align:center}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{height:40px;padding:0 14px;border-radius:12px;background:var(--surface2);font-weight:600;font-size:14px;color:var(--muted)}
+.chip.on{background:var(--text);color:var(--bg)}
+.chip.date{min-width:44px;padding:0 8px;display:flex;flex-direction:column;justify-content:center;line-height:1.1;font-size:11px}
+.chip.date b{font-size:15px}
+.seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.seg button{min-height:46px;border-radius:13px;background:var(--surface2);font-weight:600;font-size:13.5px;color:var(--muted);padding:6px}
+.seg button.on{background:var(--text);color:var(--bg)}
+.seg button small{display:block;font-weight:500;font-size:11px;opacity:.75}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{width:50px;height:50px;border-radius:14px;background:var(--surface2);font-size:24px;font-weight:600}
+.stepper .inp{text-align:center;font-family:Archivo;font-weight:800;font-size:22px}
+.emojis{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-top:8px}
+.emojis button{font-size:22px;width:42px;height:42px;border-radius:12px;background:var(--surface2);flex:none}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface2);border-radius:14px;padding:14px}
+.switch .k{width:48px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .2s}
+.switch .k::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--text);transition:transform .2s}
+.switch.on .k{background:var(--inj)}
+.switch.on .k::after{transform:translateX(20px)}
+.switch .s-t{font-weight:600}
+.switch .s-d{font-size:12.5px;color:var(--muted)}
+.check{display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:6px}
+.recap-hero{text-align:center;padding:8px 0 14px}
+.recap-hero .big{font-size:56px}
+.recap-hero .t{font-family:Archivo;font-weight:900;font-size:28px;letter-spacing:-.02em;margin-top:6px}
+.recap-hero.ok .t{color:var(--accent)}
+
+#toast{position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* onboarding / loading */
+.onb{min-height:80vh;display:flex;flex-direction:column;justify-content:center;padding-top:20px}
+.onb .logo{font-family:Archivo;font-weight:900;font-size:44px;letter-spacing:-.04em;line-height:1}
+.onb .logo span{color:var(--accent)}
+.onb p{color:var(--muted);font-size:16px;margin:10px 0 30px}
+.onb .defaults{background:var(--surface);border-radius:var(--r);padding:6px 16px;margin:6px 0 22px}
+.onb .defaults div{padding:11px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+.onb .defaults div:last-child{border:0}
+.loading{min-height:70vh;display:grid;place-items:center;color:var(--muted);text-align:center}
+.pulse{width:14px;height:14px;background:var(--accent);border-radius:4px;transform:rotate(45deg);animation:p 1s infinite alternate;margin:0 auto 14px}
+@keyframes p{to{opacity:.25;transform:rotate(225deg)}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading"><div><div class="pulse"></div>Chargement…</div></div></div>
+<nav id="nav" hidden><div class="in">
+  <button data-act="tab" data-tab="semaine"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semaine</button>
+  <button data-act="tab" data-tab="historique"><svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4h4M12 7.5V12l3 2"/></svg>Historique</button>
+  <button data-act="tab" data-tab="objectifs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></svg>Objectifs</button>
+  <button data-act="tab" data-tab="profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-4 4-5.8 7.5-5.8s6.3 1.8 7.5 5.8"/></svg>Profil</button>
+</div></nav>
+<div id="overlay" data-act="close-sheet"></div>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script>
+/* ============ utils ============ */
+const $ = s => document.querySelector(s);
+const CAP = window.Capacitor;
+const IS_APP = !!(CAP && CAP.isNativePlatform && CAP.isNativePlatform());
+const _plugins = {};
+const plugin = n => _plugins[n] || (_plugins[n] = (CAP.Plugins && CAP.Plugins[n]) || CAP.registerPlugin(n));
+let APP_VERSION = '';
+const LOCAL_KEY = 'resolio-v1';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-5);
+const clone = o => JSON.parse(JSON.stringify(o));
+const pad = n => String(n).padStart(2, '0');
+const dkey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const pkey = k => { const [a,b,c] = k.split('-').map(Number); return new Date(a, b-1, c); };
+const addDays = (k, n) => { const d = pkey(k); d.setDate(d.getDate()+n); return dkey(d); };
+const mondayKey = (d = new Date()) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay()+6) % 7)); return dkey(x); };
+const curWeek = () => mondayKey();
+const todayKey = () => dkey(new Date());
+const MONTHS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const MONTHS_L = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const DAYS = ['L','M','M','J','V','S','D'];
+const DAYS_L = ['Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.','Dim.'];
+function weekLabel(k, withYear) {
+  const a = pkey(k), b = pkey(addDays(k, 6));
+  const y = withYear && b.getFullYear() !== new Date().getFullYear() ? ' ' + b.getFullYear() : '';
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()} – ${b.getDate()} ${MONTHS[b.getMonth()]}${y}`;
+  return `${a.getDate()} ${MONTHS[a.getMonth()]} – ${b.getDate()} ${MONTHS[b.getMonth()]}${y}`;
+}
+const fmt = n => { n = Math.round((+n || 0) * 10) / 10; return n.toLocaleString('fr-FR'); };
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+
+/* ============ stores ============ */
+function makeLocalStore() {
+  // Toutes les données tiennent dans un seul objet JSON.
+  // Sur téléphone : plugin Preferences (stockage natif, fiable sur Android et iOS).
+  // Dans le navigateur (développement) : localStorage.
+  const KEY = LOCAL_KEY;
+  let blob = { profile: null, goals: null, weeks: {} };
+  const read = async () => {
+    try {
+      if (IS_APP) { const r = await plugin('Preferences').get({ key: KEY }); return r && r.value; }
+      return localStorage.getItem(KEY);
+    } catch (e) { return null; }
+  };
+  let writing = false, pending = false;
+  const persist = async () => {
+    if (writing) { pending = true; return; }
+    writing = true;
+    do {
+      pending = false;
+      const value = JSON.stringify(blob);
+      try {
+        if (IS_APP) await plugin('Preferences').set({ key: KEY, value });
+        else localStorage.setItem(KEY, value);
+      } catch (e) { toast('Enregistrement impossible'); }
+    } while (pending);
+    writing = false;
+  };
+  return {
+    mode: 'local',
+    async start(on) {
+      const raw = await read();
+      if (raw) { try { blob = Object.assign(blob, JSON.parse(raw)); } catch (e) {} }
+      on('profile', blob.profile); on('goals', blob.goals); on('weeks', blob.weeks || {}, true);
+    },
+    save(name, data) {
+      if (name === 'profile') blob.profile = clone(data);
+      else if (name === 'goals') blob.goals = clone(data);
+      else blob.weeks[name.slice(5)] = clone(data);
+      persist();
+    },
+    async replaceAll(data) { blob = { profile: data.profile || null, goals: data.goals || null, weeks: data.weeks || {} }; await persist(); }
+  };
+}
+
+async function initStore() { return makeLocalStore(); }
+
+/* ============ state ============ */
+const state = { profile: null, goals: null, weeks: {}, got: { p: false, g: false, w: false }, confirmed: false, slow: false };
+let store;
+const TABS = ['semaine', 'historique', 'objectifs', 'profil'];
+let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'semaine';
+let lastWeekSeen = curWeek();
+
+const saveGoals = items => { state.goals = items; store.save('goals', { items }); render(); };
+const saveWeek = (k, doc) => { state.weeks[k] = doc; store.save('week:' + k, doc); render(); };
+const saveProfile = p => { state.profile = p; store.save('profile', p); render(); };
+const weekDoc = k => state.weeks[k] || { week: k, entries: [], closed: false };
+const goalsList = () => state.goals || [];
+const goalById = id => goalsList().find(g => g.id === id);
+
+/* ============ goal logic ============ */
+const TYPE_INFO = {
+  count: { label: 'Nombre de fois', sub: 'ex. 3 séances' },
+  quantity: { label: 'Quantité', sub: 'ex. 100 pages, 20 km' },
+  daily: { label: 'Chaque jour', sub: 'ex. 7 jours / 7' },
+  once: { label: 'Une fois', sub: 'à cocher' }
+};
+function defaultUnit(type, cat) {
+  if (type === 'quantity') return cat === 'reading' ? 'pages' : cat === 'sport' ? 'km' : 'min';
+  if (type === 'count') return cat === 'sport' ? 'séances' : 'fois';
+  if (type === 'daily') return 'jours';
+  return '';
+}
+function targetFor(g, wk) {
+  const h = (g.targetHistory || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
+  if (g.type === 'once') return 1;
+  if (!h.length) return g.target || 1;
+  let t = h[0].target;
+  for (const x of h) if (x.from <= wk) t = x.target;
+  return t;
+}
+const isActive = (g, wk) => g.createdWeek <= wk && (!g.archivedWeek || wk < g.archivedWeek);
+const isInjured = (g, wk) => (g.injuries || []).some(p => p.from <= wk && (!p.to || wk < p.to));
+const injuredNow = g => (g.injuries || []).some(p => !p.to);
+function doneFor(g, entries) {
+  const es = (entries || []).filter(e => e.goalId === g.id);
+  if (g.type === 'quantity') return es.reduce((s, e) => s + num(e.amount), 0);
+  if (g.type === 'daily') return new Set(es.map(e => e.date)).size;
+  if (g.type === 'once') return Math.min(es.length, 1);
+  return es.length;
+}
+function computeResult(wk, doc) {
+  const goals = goalsList().filter(g => isActive(g, wk)).map(g => {
+    const target = targetFor(g, wk), done = doneFor(g, doc.entries);
+    const status = isInjured(g, wk) ? 'injured' : done >= target ? 'ok' : 'ko';
+    return { id: g.id, name: g.name, emoji: g.emoji, unit: g.unit || '', type: g.type, target, done, status };
+  });
+  const counted = goals.filter(x => x.status !== 'injured');
+  return { goals, validated: counted.length > 0 && counted.every(x => x.status === 'ok'), exempt: counted.length === 0 };
+}
+const liveResult = () => computeResult(curWeek(), weekDoc(curWeek()));
+
+/* ============ weekly closing (lundi 00:00) ============ */
+let recapOpenFor = null;
+function maintenance() {
+  if (!state.profile || !state.goals || !state.confirmed) return;
+  const cur = curWeek();
+  let k = state.profile.startWeek || cur, guard = 0;
+  const prev = addDays(cur, -7);
+  while (k < cur && guard++ < 520) {
+    const w = state.weeks[k];
+    if (!w || !w.closed) {
+      const doc = w ? clone(w) : { week: k, entries: [] };
+      doc.closed = true;
+      doc.result = computeResult(k, doc);
+      doc.recapSeen = k !== prev;
+      state.weeks[k] = doc;
+      store.save('week:' + k, doc);
+    }
+    k = addDays(k, 7);
+  }
+  const pw = state.weeks[prev];
+  if (pw && pw.closed && pw.result && !pw.recapSeen && recapOpenFor !== prev && !sheetOpen()) openRecap(prev);
+}
+setInterval(() => {
+  if (curWeek() !== lastWeekSeen) { lastWeekSeen = curWeek(); maintenance(); render(); }
+}, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = curWeek(); maintenance(); render(); } });
+
+/* ============ stats & badges ============ */
+function computeStats() {
+  let pages = 0, sessions = 0, km = 0, minutes = 0, entries = 0;
+  const books = new Set();
+  for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) {
+    entries++;
+    if (e.cat === 'reading') { pages += num(e.amount); if (e.book) books.add(e.book.trim().toLowerCase()); }
+    if (e.cat === 'sport') { sessions++; km += num(e.distance); minutes += num(e.duration); }
+  }
+  const closed = Object.values(state.weeks).filter(w => w.closed && w.result).sort((a, b) => a.week < b.week ? -1 : 1);
+  let cur = 0, best = 0, validated = 0, total = 0;
+  for (const w of closed) {
+    if (w.result.exempt) continue;
+    total++;
+    if (w.result.validated) { cur++; validated++; best = Math.max(best, cur); } else cur = 0;
+  }
+  const live = liveResult();
+  if (live.validated) { cur++; best = Math.max(best, cur); }
+  return { pages, sessions, km, minutes, entries, books: books.size, streak: cur, best, validated, total };
+}
+const BADGES = [
+  { e: '👣', n: 'Premier pas', d: '1er enregistrement', t: s => s.entries >= 1 },
+  { e: '✅', n: 'Validée', d: '1 semaine validée', t: s => s.validated >= 1 },
+  { e: '🔥', n: 'En feu', d: 'Série de 4 semaines', t: s => s.best >= 4 },
+  { e: '⚙️', n: 'Machine', d: 'Série de 10 semaines', t: s => s.best >= 10 },
+  { e: '👑', n: 'Inarrêtable', d: 'Série de 25 semaines', t: s => s.best >= 25 },
+  { e: '📚', n: 'Rat de biblio', d: '1 000 pages lues', t: s => s.pages >= 1000 },
+  { e: '🏛️', n: 'Encyclopédie', d: '5 000 pages lues', t: s => s.pages >= 5000 },
+  { e: '📖', n: 'Bibliophile', d: '10 livres différents', t: s => s.books >= 10 },
+  { e: '💪', n: 'Sportif', d: '25 séances', t: s => s.sessions >= 25 },
+  { e: '🥇', n: 'Athlète', d: '100 séances', t: s => s.sessions >= 100 },
+  { e: '🏅', n: 'Marathon', d: '42 km cumulés', t: s => s.km >= 42 },
+  { e: '🌍', n: 'Globe-trotter', d: '500 km cumulés', t: s => s.km >= 500 },
+];
+
+/* ============ render ============ */
+const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function ring(p) {
+  const r = 26, c = 2 * Math.PI * r;
+  return `<svg viewBox="0 0 64 64" class="ring"><circle cx="32" cy="32" r="${r}" class="ring-bg"/><circle cx="32" cy="32" r="${r}" class="ring-fg" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(1)}" transform="rotate(-90 32 32)"/></svg>`;
+}
+function brand() {
+  const sync = IS_APP ? '' : 'Version web (dév.)';
+  return `<div class="brand"><span class="dot"></span>Resolio<span class="sync">${sync}</span></div>`;
+}
+function render() {
+  const app = $('#app');
+  if (!(state.got.p && state.got.g && state.got.w)) {
+    app.innerHTML = `<div class="loading"><div><div class="pulse"></div>Chargement…${state.slow ? '<div style="margin-top:10px;font-size:13px">Tes données mettent du temps à arriver.<br>Vérifie ta connexion.</div>' : ''}</div></div>`;
+    $('#nav').hidden = true; return;
+  }
+  if (!state.profile) { $('#nav').hidden = true; app.innerHTML = viewOnboarding(); return; }
+  $('#nav').hidden = false;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  const v = { semaine: viewWeek, historique: viewHistory, objectifs: viewGoals, profil: viewProfile }[tab];
+  app.innerHTML = brand() + v();
+}
+
+function viewOnboarding() {
+  return `<div class="onb">
+    <div class="logo">Resoli<span>o</span></div>
+    <p>Tes objectifs de la semaine. Pas d'excuses.</p>
+    <div class="field"><label>Ton prénom</label><input class="inp" id="onb-name" autocomplete="given-name" placeholder="Quentin"></div>
+    <div class="lbl">Tes objectifs pour commencer</div>
+    <div class="defaults">
+      <div><span>📖</span><span>Lire <b>100 pages</b></span></div>
+      <div><span>🏃</span><span><b>3 séances</b> de cardio (course, natation)</span></div>
+      <div><span>🏋️</span><span><b>3 séances</b> de musculation</span></div>
+    </div>
+    <button class="btn" data-act="start">C'est parti</button>
+    <div class="hint" style="text-align:center;margin-top:12px">Tu pourras les modifier et en ajouter d'autres.</div>
+  </div>`;
+}
+
+function goalMeta(g, done, target) {
+  const u = g.unit ? ' ' + esc(g.unit) : '';
+  if (g.type === 'once') return done ? 'Fait cette semaine' : 'À faire cette semaine';
+  return `<b>${fmt(done)}</b> / ${fmt(target)}${u}`;
+}
+function viewWeek() {
+  const cur = curWeek(), doc = weekDoc(cur), res = computeResult(cur, doc);
+  const counted = res.goals.filter(x => x.status !== 'injured');
+  const ok = counted.filter(x => x.status === 'ok').length;
+  const dayIdx = (new Date().getDay() + 6) % 7, left = 7 - dayIdx;
+  const leftTxt = left === 1 ? 'Dernier jour, fonce !' : `Encore ${left} jours`;
+  let h = `<div class="eyebrow">Semaine en cours</div><h1>${weekLabel(cur)}</h1>`;
+  h += `<div class="summary">${ring(counted.length ? ok / counted.length : 0)}<div><b>${ok} / ${counted.length}</b> <span class="muted">objectifs atteints</span><div class="muted" style="font-size:13.5px">${leftTxt}</div></div></div>`;
+  if (res.validated) h += `<div class="validated-banner">🔥 Semaine validée. Bien joué ${esc(state.profile.name)} !</div>`;
+  const active = goalsList().filter(g => isActive(g, cur));
+  if (!active.length) h += `<div class="empty">Aucun objectif actif.<br><br><button class="btn" data-act="new-goal">Ajouter un objectif</button></div>`;
+  for (const g of active) {
+    const r = res.goals.find(x => x.id === g.id);
+    const inj = r.status === 'injured', done = r.status === 'ok';
+    const pct = Math.min(100, r.target ? r.done / r.target * 100 : 0);
+    let tags = '';
+    if (inj) tags = `<span class="tag inj">🩹 Blessure · ne compte pas</span>`;
+    else if (done) tags = `<span class="tag ok">Atteint</span>`;
+    const btn = inj ? '' : g.type === 'daily' ? '' :
+      `<button class="add" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && g.type === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
+    h += `<div class="goal ${done ? 'done' : ''} ${inj ? 'injured' : ''}">
+      <div class="g-top"><div class="emoji">${esc(g.emoji || '🎯')}</div>
+        <div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalMeta(g, r.done, r.target)}</div></div>
+        ${tags && !btn ? tags : ''}${btn}
+      </div>`;
+    if (g.type === 'daily') {
+      const set = new Set((doc.entries || []).filter(e => e.goalId === g.id).map(e => e.date));
+      h += `<div class="days">` + DAYS.map((d, i) => {
+        const dk = addDays(cur, i), fut = dk > todayKey();
+        return `<button class="day ${set.has(dk) ? 'on' : ''} ${dk === todayKey() ? 'today' : ''}" ${fut || inj ? 'disabled' : ''} data-act="toggle-day" data-id="${g.id}" data-date="${dk}">${d}</button>`;
+      }).join('') + `</div>`;
+    } else if (g.type !== 'once') h += `<div class="bar"><i style="width:${pct}%"></i></div>`;
+    if (tags && btn) h += `<div style="margin-top:10px">${tags}</div>`;
+    h += `</div>`;
+  }
+  const entries = (doc.entries || []).filter(e => e.goalId && goalById(e.goalId) && goalById(e.goalId).type !== 'daily')
+    .slice().sort((a, b) => a.date === b.date ? (b.at || 0) - (a.at || 0) : a.date < b.date ? 1 : -1);
+  h += `<h2>Journal de la semaine</h2>`;
+  if (!entries.length) h += `<div class="empty">Rien pour l'instant. Appuie sur <b style="color:var(--accent)">+</b> pour enregistrer une séance ou ta lecture.</div>`;
+  else h += `<div class="card">` + entries.map(e => entryRow(e)).join('') + `</div>`;
+  return h;
+}
+function entryDesc(e, g) {
+  const parts = [];
+  if (g.type === 'quantity') parts.push(`${fmt(e.amount)} ${g.unit || ''}`.trim());
+  if (e.activity) parts.push(e.activity);
+  if (e.book) parts.push('« ' + e.book + ' »');
+  if (e.duration) parts.push(fmt(e.duration) + ' min');
+  if (e.distance) parts.push(fmt(e.distance) + ' km');
+  return parts;
+}
+let pendingDel = null, pendingDelT;
+function entryRow(e) {
+  const g = goalById(e.goalId);
+  const parts = entryDesc(e, g);
+  const di = (pkey(e.date).getDay() + 6) % 7;
+  const title = parts.length ? esc(parts[0]) : esc(g.name);
+  const sub = [DAYS_L[di] + ' ' + pkey(e.date).getDate(), ...parts.slice(1).map(esc), e.note ? esc(e.note) : ''].filter(Boolean).join(' · ');
+  return `<div class="entry"><div class="e-emoji">${esc(g.emoji || '🎯')}</div><div class="e-main"><div class="e-title">${title}${parts.length ? ` <span class="muted" style="font-weight:500">· ${esc(g.name)}</span>` : ''}</div><div class="e-sub">${sub}</div></div>
+    <button class="del ${pendingDel === e.id ? 'confirm' : ''}" data-act="del-entry" data-id="${e.id}">${pendingDel === e.id ? 'Supprimer ?' : 'Retirer'}</button></div>`;
+}
+
+function viewHistory() {
+  const s = computeStats();
+  const closed = Object.values(state.weeks).filter(w => w.closed && w.result).sort((a, b) => a.week < b.week ? 1 : -1);
+  let h = `<div class="eyebrow">Rétrospective</div><h1>Tes semaines</h1>`;
+  h += `<div class="hist-stats"><div class="stat hl"><div class="v">${s.validated}<span class="muted" style="font-size:16px"> / ${s.total}</span></div><div class="l">semaines validées</div></div><div class="stat"><div class="v">${s.streak}</div><div class="l">série en cours</div></div></div>`;
+  h += `<h2>Historique</h2>`;
+  if (!closed.length) return h + `<div class="empty">Ta première rétrospective arrivera lundi ${weekLabel(addDays(curWeek(), 7)).split(' – ')[0]} à minuit.</div>`;
+  for (const w of closed) {
+    const r = w.result;
+    const badge = r.exempt ? `<span class="tag inj">🩹 Pause</span>` : r.validated ? `<span class="tag ok">✓ Validée</span>` : `<span class="tag ko">✗ Non validée</span>`;
+    h += `<details class="week-row"><summary><div class="wr-label">${weekLabel(w.week, true)}<small>${pkey(w.week).getFullYear()}</small></div>${badge}</summary><div class="wr-detail">` +
+      (r.goals.length ? r.goals.map(x => {
+        const ic = x.status === 'ok' ? '✓' : x.status === 'injured' ? '🩹' : '✗';
+        const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
+        return `<div class="wr-goal"><span>${ic} ${esc(x.emoji || '')} ${esc(x.name)}</span><span>${val}</span></div>`;
+      }).join('') : `<div class="wr-goal"><span class="muted">Aucun objectif actif</span></div>`) + `</div></details>`;
+  }
+  return h;
+}
+
+function goalLine(g) {
+  const t = targetFor(g, curWeek());
+  if (g.type === 'once') return 'Une fois par semaine';
+  if (g.type === 'daily') return `${t} jour${t > 1 ? 's' : ''} / 7`;
+  return `${fmt(t)} ${esc(g.unit || '')} / semaine`;
+}
+function viewGoals() {
+  const cur = curWeek();
+  const active = goalsList().filter(g => !g.archivedWeek || cur < g.archivedWeek);
+  const archived = goalsList().filter(g => g.archivedWeek && cur >= g.archivedWeek);
+  let h = `<div class="eyebrow">Réglages</div><h1>Objectifs</h1><div style="height:16px"></div>`;
+  active.forEach((g, i) => {
+    h += `<div class="gl-item"><div class="emoji">${esc(g.emoji || '🎯')}</div>
+      <div class="g-title" data-act="edit-goal" data-id="${g.id}"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalLine(g)}${injuredNow(g) ? ' · <span style="color:var(--inj)">🩹 blessure</span>' : ''}</div></div>
+      <div class="mv"><button data-act="move-goal" data-id="${g.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">▲</button><button data-act="move-goal" data-id="${g.id}" data-dir="1" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Descendre">▼</button></div></div>`;
+  });
+  h += `<button class="btn ghost" data-act="new-goal" style="margin-top:6px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Nouvel objectif</button>`;
+  h += `<div class="hint" style="margin-top:14px">Appuie sur un objectif pour changer son chiffre, le mettre en pause pour blessure ou l'archiver. Un changement de chiffre compte à partir de la semaine en cours : les semaines passées gardent leur ancien objectif.</div>`;
+  if (archived.length) {
+    h += `<h2>Archivés</h2>`;
+    archived.forEach(g => {
+      h += `<div class="gl-item" style="opacity:.7"><div class="emoji">${esc(g.emoji || '🎯')}</div><div class="g-title"><div class="g-name">${esc(g.name)}</div><div class="g-meta">${goalLine(g)}</div></div><button class="chip" data-act="restore-goal" data-id="${g.id}">Restaurer</button></div>`;
+    });
+  }
+  return h;
+}
+
+function viewProfile() {
+  const p = state.profile, s = computeStats();
+  const since = p.createdAt ? new Date(p.createdAt) : pkey(p.startWeek || curWeek());
+  const av = p.photo ? `<img src="${esc(p.photo)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase());
+  let h = `<div class="prof-head"><div class="avatar">${av}</div><div><div class="pn">${esc(p.name)}</div><div class="muted" style="font-size:13.5px">Depuis ${MONTHS_L[since.getMonth()]} ${since.getFullYear()}</div><button class="edit-link" data-act="edit-profile">Modifier le profil</button></div></div>`;
+  h += `<h2>Séries</h2><div class="stats">
+    <div class="stat hl"><div class="v">${s.streak} 🔥</div><div class="l">semaines validées d'affilée</div></div>
+    <div class="stat"><div class="v">${s.best}</div><div class="l">meilleure série</div></div></div>`;
+  h += `<h2>Totaux</h2><div class="stats">
+    <div class="stat"><div class="v">${fmt(s.pages)}</div><div class="l">pages lues</div></div>
+    <div class="stat"><div class="v">${s.books}</div><div class="l">livres différents</div></div>
+    <div class="stat"><div class="v">${s.sessions}</div><div class="l">séances de sport</div></div>
+    <div class="stat"><div class="v">${fmt(s.km)}</div><div class="l">km parcourus</div></div>
+    <div class="stat"><div class="v">${Math.floor(s.minutes / 60)}h${pad(Math.round(s.minutes % 60))}</div><div class="l">de sport enregistrées</div></div>
+    <div class="stat"><div class="v">${s.validated}</div><div class="l">semaines validées</div></div></div>`;
+  const got = BADGES.filter(b => b.t(s)).length;
+  h += `<h2>Badges <span class="muted" style="font-family:Inter;font-weight:600;font-size:14px">${got} / ${BADGES.length}</span></h2><div class="badges">` +
+    BADGES.map(b => { const ok = b.t(s); return `<div class="badge ${ok ? 'got' : 'locked'}"><div class="b-e">${b.e}</div><div class="b-n">${b.n}</div><div class="b-d">${b.d}</div></div>`; }).join('') + `</div>`;
+  h += `<h2>Sauvegarde</h2><div class="card" style="padding:16px">
+    <div class="muted" style="font-size:13.5px;margin-bottom:14px">Tes données sont enregistrées sur ce téléphone. Fais une sauvegarde de temps en temps (Drive, mail…) pour ne rien perdre si tu changes de téléphone.</div>
+    <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter une sauvegarde</button>
+    <button class="btn quiet" data-act="import">Restaurer une sauvegarde</button></div>`;
+  h += `<div class="foot">Resolio${APP_VERSION ? ' · v' + esc(APP_VERSION) : ''}</div>`;
+  return h;
+}
+
+/* ============ sheet ============ */
+const sheetOpen = () => $('#sheet').classList.contains('open');
+function openSheet(html) { $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.add('open'); $('#overlay').classList.add('open'); $('#sheet').scrollTop = 0; }
+function closeSheet() {
+  $('#sheet').classList.remove('open'); $('#overlay').classList.remove('open');
+  if (recapOpenFor) markRecapSeen();
+}
+
+/* ---- entry ---- */
+let entryDraft = null;
+function lastBook() {
+  let best = null;
+  for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) if (e.book && (!best || (e.at || 0) > (best.at || 0))) best = e;
+  return best ? best.book : '';
+}
+function allBooks() {
+  const m = new Map();
+  for (const w of Object.values(state.weeks)) for (const e of (w.entries || [])) if (e.book) m.set(e.book.trim().toLowerCase(), e.book.trim());
+  return [...m.values()];
+}
+function openEntrySheet(id) {
+  const g = goalById(id); if (!g) return;
+  if (g.type === 'once') {
+    const cur = curWeek(), doc = clone(weekDoc(cur));
+    const mine = doc.entries.filter(e => e.goalId === g.id);
+    if (mine.length) { doc.entries = doc.entries.filter(e => e.goalId !== g.id); saveWeek(cur, doc); toast('Marqué comme pas fait'); return; }
+  }
+  const acts = (g.activities || []).filter(Boolean);
+  entryDraft = { goalId: id, date: todayKey(), activity: acts[0] || '' };
+  renderEntrySheet();
+}
+function renderEntrySheet() {
+  const g = goalById(entryDraft.goalId), cur = curWeek();
+  const acts = (g.activities || []).filter(Boolean);
+  let h = `<div class="sh-title"><div class="emoji">${esc(g.emoji || '🎯')}</div><div class="t">${esc(g.name)}</div></div>`;
+  if (g.type === 'quantity') h += `<div class="field"><label>${esc(g.unit || 'Quantité')}</label><input class="inp big" id="en-amount" type="number" inputmode="decimal" min="0" placeholder="0"></div>`;
+  if (g.cat === 'reading') h += `<div class="field"><label>Livre</label><input class="inp" id="en-book" list="books" placeholder="Titre du livre" value="${esc(lastBook())}"><datalist id="books">${allBooks().map(b => `<option value="${esc(b)}">`).join('')}</datalist></div>`;
+  if (acts.length) h += `<div class="field"><label>Activité</label><div class="chips">${acts.map(a => `<button class="chip ${entryDraft.activity === a ? 'on' : ''}" data-act="pick-act" data-val="${esc(a)}">${esc(a)}</button>`).join('')}</div></div>`;
+  if (g.cat === 'sport') {
+    h += `<div class="row"><div class="field"><label>Durée (min)</label><input class="inp" id="en-dur" type="number" inputmode="numeric" min="0" placeholder="Facultatif"></div>`;
+    if (g.distance) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Facultatif"></div>`;
+    h += `</div>`;
+  }
+  h += `<div class="field"><label>Jour</label><div class="chips">` + DAYS.map((d, i) => {
+    const dk = addDays(cur, i); if (dk > todayKey()) return '';
+    return `<button class="chip date ${entryDraft.date === dk ? 'on' : ''}" data-act="pick-date" data-val="${dk}">${d}<b>${pkey(dk).getDate()}</b></button>`;
+  }).join('') + `</div></div>`;
+  h += `<div class="field"><label>Note</label><input class="inp" id="en-note" placeholder="Facultatif" maxlength="140"></div>`;
+  h += `<button class="btn" data-act="save-entry">Enregistrer</button>`;
+  const keep = sheetOpen() ? readEntryInputs() : null;
+  openSheet(h);
+  if (keep) for (const [k, v] of Object.entries(keep)) { const el = $('#' + k); if (el) el.value = v; }
+  else if (g.type === 'quantity') setTimeout(() => { const el = $('#en-amount'); if (el) el.focus(); }, 280);
+}
+function readEntryInputs() {
+  const o = {}; ['en-amount', 'en-book', 'en-dur', 'en-dist', 'en-note'].forEach(k => { const el = $('#' + k); if (el) o[k] = el.value; }); return o;
+}
+function saveEntry() {
+  const g = goalById(entryDraft.goalId), v = readEntryInputs();
+  const e = { id: rid(), goalId: g.id, cat: g.cat || 'other', date: entryDraft.date, at: Date.now() };
+  if (g.type === 'quantity') { const a = num(v['en-amount']); if (a <= 0) { toast('Indique ' + (g.unit ? 'le nombre de ' + g.unit : 'une quantité')); return; } e.amount = a; }
+  else e.amount = 1;
+  if (v['en-book'] && v['en-book'].trim()) e.book = v['en-book'].trim().slice(0, 120);
+  if (entryDraft.activity) e.activity = entryDraft.activity;
+  if (num(v['en-dur']) > 0) e.duration = num(v['en-dur']);
+  if (num(v['en-dist']) > 0) e.distance = num(v['en-dist']);
+  if (v['en-note'] && v['en-note'].trim()) e.note = v['en-note'].trim();
+  const cur = curWeek(), doc = clone(weekDoc(cur));
+  const before = computeResult(cur, doc).goals.find(x => x.id === g.id);
+  doc.entries.push(e); doc.week = cur; doc.closed = false;
+  closeSheet(); saveWeek(cur, doc);
+  const after = computeResult(cur, doc);
+  const ga = after.goals.find(x => x.id === g.id);
+  if (after.validated) toast('🔥 Semaine validée !');
+  else if (ga && ga.status === 'ok' && before && before.status !== 'ok') toast('✓ Objectif atteint !');
+  else toast('Enregistré');
+}
+function toggleDay(id, date) {
+  const cur = curWeek(), doc = clone(weekDoc(cur));
+  const has = doc.entries.some(e => e.goalId === id && e.date === date);
+  const g = goalById(id);
+  if (has) doc.entries = doc.entries.filter(e => !(e.goalId === id && e.date === date));
+  else doc.entries.push({ id: rid(), goalId: id, cat: g.cat || 'other', date, amount: 1, at: Date.now() });
+  doc.week = cur; doc.closed = false;
+  saveWeek(cur, doc);
+}
+function deleteEntry(id) {
+  if (pendingDel !== id) {
+    pendingDel = id; clearTimeout(pendingDelT);
+    pendingDelT = setTimeout(() => { pendingDel = null; render(); }, 3000);
+    render(); return;
+  }
+  pendingDel = null;
+  const cur = curWeek(), doc = clone(weekDoc(cur));
+  doc.entries = doc.entries.filter(e => e.id !== id);
+  saveWeek(cur, doc); toast('Retiré');
+}
+
+/* ---- goal editor ---- */
+let goalDraft = null, archiveConfirm = false;
+const EMOJIS = ['📖', '🏃', '🏊', '🏋️', '🚴', '🧘', '🥾', '⚽', '💧', '🥗', '😴', '🧠', '✍️', '🎸', '🗣️', '💰', '🚭', '📵', '🧹', '🎯'];
+function openGoalEditor(id) {
+  archiveConfirm = false;
+  if (id) goalDraft = Object.assign(clone(goalById(id)), { target: targetFor(goalById(id), curWeek()), _new: false });
+  else goalDraft = { _new: true, name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', target: 3, activities: [], distance: false };
+  renderGoalEditor();
+}
+function readGoalForm() {
+  const v = id => { const el = $('#' + id); return el ? el.value : null; };
+  if (v('ge-name') !== null) goalDraft.name = v('ge-name');
+  if (v('ge-emoji') !== null) goalDraft.emoji = v('ge-emoji');
+  if (v('ge-unit') !== null) goalDraft.unit = v('ge-unit');
+  if (v('ge-target') !== null) goalDraft.target = Math.max(1, num(v('ge-target')) || 1);
+  if (v('ge-acts') !== null) goalDraft.activities = v('ge-acts').split(',').map(s => s.trim()).filter(Boolean);
+  const d = $('#ge-dist'); if (d) goalDraft.distance = d.checked;
+}
+function renderGoalEditor() {
+  const d = goalDraft;
+  let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvel objectif' : 'Modifier l\'objectif'}</div></div>`;
+  h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="ex. Méditer" maxlength="40"></div>
+    <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
+  h += `<div class="field"><label>Catégorie</label><div class="seg three">${[['reading', '📖 Lecture'], ['sport', '💪 Sport'], ['other', '✨ Autre']].map(([k, l]) => `<button class="${d.cat === k ? 'on' : ''}" data-act="seg" data-field="cat" data-val="${k}">${l}</button>`).join('')}</div>
+    <div class="hint">${d.cat === 'reading' ? 'Tu pourras noter le livre à chaque fois, et les pages comptent dans tes totaux.' : d.cat === 'sport' ? 'Tu pourras noter l\'activité, la durée et la distance. Compte dans tes séances.' : 'Objectif libre.'}</div></div>`;
+  h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).map(([k, t]) => `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
+  if (d.type !== 'once') {
+    h += `<div class="field"><label>${d.type === 'daily' ? 'Jours par semaine' : 'Objectif par semaine'}</label><div class="stepper"><button data-act="step" data-val="-1">−</button><input class="inp" id="ge-target" type="number" inputmode="decimal" min="1" ${d.type === 'daily' ? 'max="7"' : ''} value="${d.target}"><button data-act="step" data-val="1">+</button></div></div>`;
+    if (d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="pages, séances, km…" maxlength="20"></div>`;
+  }
+  if (d.cat === 'sport') {
+    h += `<div class="field"><label>Activités proposées</label><input class="inp" id="ge-acts" value="${esc((d.activities || []).join(', '))}" placeholder="ex. Course, Natation"><div class="hint">Sépare-les par des virgules. Laisse vide si tu n'en as pas besoin.</div></div>`;
+    h += `<div class="field"><label class="check" style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text)"><input type="checkbox" id="ge-dist" ${d.distance ? 'checked' : ''}> Noter la distance (km)</label></div>`;
+  }
+  if (!d._new) {
+    const inj = injuredNow(goalById(d.id));
+    h += `<div class="field"><div class="switch ${inj ? 'on' : ''}" data-act="toggle-injury" role="switch" aria-checked="${inj}"><div><div class="s-t">🩹 Pause blessure</div><div class="s-d">${inj ? 'Activée : cet objectif ne compte pas pour valider tes semaines.' : 'L\'objectif ne comptera plus tant que tu es blessé.'}</div></div><div class="k"></div></div></div>`;
+  }
+  h += `<button class="btn" data-act="save-goal">${d._new ? 'Ajouter' : 'Enregistrer'}</button>`;
+  if (!d._new) h += `<button class="btn danger ${archiveConfirm ? 'confirm' : ''}" data-act="archive-goal" style="margin-top:8px">${archiveConfirm ? 'Confirmer l\'archivage' : 'Archiver l\'objectif'}</button>`;
+  const y = $('#sheet').scrollTop;
+  openSheet(h); $('#sheet').scrollTop = y;
+}
+function saveGoal() {
+  readGoalForm();
+  const d = goalDraft, cur = curWeek();
+  if (!d.name.trim()) { toast('Donne un nom à ton objectif'); return; }
+  let target = d.type === 'once' ? 1 : d.type === 'daily' ? Math.min(7, Math.max(1, Math.round(d.target))) : Math.max(1, d.target);
+  const items = clone(goalsList());
+  const fields = { name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type: d.type, unit: d.type === 'daily' ? 'jours' : d.type === 'once' ? '' : (d.unit || '').trim(), activities: d.cat === 'sport' ? d.activities : [], distance: d.cat === 'sport' && !!d.distance };
+  if (d._new) {
+    items.push(Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target }] }, fields));
+  } else {
+    const g = items.find(x => x.id === d.id);
+    Object.assign(g, fields);
+    if (targetFor(g, cur) !== target || g.type === 'once') {
+      g.targetHistory = (g.targetHistory || []).filter(x => x.from !== cur);
+      g.targetHistory.push({ from: cur, target });
+      g.targetHistory.sort((a, b) => a.from < b.from ? -1 : 1);
+    }
+  }
+  closeSheet(); saveGoals(items); toast(d._new ? 'Objectif ajouté' : 'Objectif mis à jour');
+}
+function toggleInjury() {
+  readGoalForm();
+  const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id), cur = curWeek();
+  g.injuries = g.injuries || [];
+  const open = g.injuries.find(p => !p.to);
+  if (open) { if (open.from === cur) g.injuries = g.injuries.filter(p => p !== open); else open.to = addDays(cur, 7); }
+  else g.injuries.push({ from: cur, to: null });
+  saveGoals(items);
+  goalDraft.injuries = g.injuries;
+  renderGoalEditor();
+  toast(open ? 'Pause blessure terminée. Prompt rétablissement !' : 'Pause blessure activée. Soigne-toi bien 🩹');
+}
+function archiveGoal() {
+  if (!archiveConfirm) { archiveConfirm = true; readGoalForm(); renderGoalEditor(); return; }
+  const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id);
+  g.archivedWeek = curWeek();
+  closeSheet(); saveGoals(items); toast('Objectif archivé');
+}
+
+/* ---- profile ---- */
+let photoDraft;
+function openProfileEditor() {
+  photoDraft = state.profile.photo || null;
+  renderProfileEditor();
+}
+function renderProfileEditor() {
+  const name = $('#pe-name') ? $('#pe-name').value : state.profile.name;
+  const av = photoDraft ? `<img src="${esc(photoDraft)}" alt="">` : esc((name || '?').charAt(0).toUpperCase());
+  openSheet(`<div class="sh-title"><div class="t">Mon profil</div></div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px"><div class="avatar">${av}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1"><label class="btn quiet" style="height:44px;font-size:14px">Choisir une photo<input type="file" id="pe-photo" accept="image/*" hidden></label>
+      ${photoDraft ? '<button class="btn danger" style="height:36px;font-size:13.5px" data-act="remove-photo">Retirer la photo</button>' : ''}</div></div>
+    <div class="field"><label>Prénom</label><input class="inp" id="pe-name" value="${esc(name)}" maxlength="30"></div>
+    <button class="btn" data-act="save-profile">Enregistrer</button>`);
+}
+function resizeImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = 320, c = document.createElement('canvas'); c.width = c.height = s;
+      const m = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(); };
+    img.src = url;
+  });
+}
+
+/* ---- recap ---- */
+function openRecap(k) {
+  recapOpenFor = k;
+  const w = state.weeks[k], r = w.result, s = computeStats();
+  const ok = r.validated, ex = r.exempt;
+  let h = `<div class="recap-hero ${ok ? 'ok' : ''}"><div class="eyebrow" style="margin:0 0 6px">Bilan · ${weekLabel(k)}</div><div class="big">${ex ? '🩹' : ok ? '🏆' : '💪'}</div>
+    <div class="t">${ex ? 'Semaine en pause' : ok ? 'Semaine validée !' : 'Pas cette fois'}</div>
+    <div class="muted" style="margin-top:6px">${ex ? 'Prends soin de toi.' : ok ? `Série en cours : ${s.streak} semaine${s.streak > 1 ? 's' : ''} 🔥` : 'Nouvelle semaine, nouvelle chance. Faut le faire.'}</div></div>`;
+  h += `<div class="card" style="margin-bottom:18px">` + r.goals.map(x => {
+    const ic = x.status === 'ok' ? '<span class="tag ok">✓</span>' : x.status === 'injured' ? '<span class="tag inj">🩹</span>' : '<span class="tag ko">✗</span>';
+    const val = x.type === 'once' ? (x.done ? 'fait' : 'pas fait') : `${fmt(x.done)} / ${fmt(x.target)} ${esc(x.unit)}`;
+    return `<div class="entry"><div class="e-emoji">${esc(x.emoji || '')}</div><div class="e-main"><div class="e-title">${esc(x.name)}</div><div class="e-sub">${val}</div></div>${ic}</div>`;
+  }).join('') + `</div><button class="btn" data-act="close-sheet">C'est parti pour cette semaine</button>`;
+  openSheet(h);
+}
+function markRecapSeen() {
+  const k = recapOpenFor; recapOpenFor = null;
+  const w = state.weeks[k]; if (!w || w.recapSeen) return;
+  const doc = clone(w); doc.recapSeen = true; saveWeek(k, doc);
+}
+
+/* ============ actions ============ */
+const ACTIONS = {
+  'tab': el => { tab = el.dataset.tab; history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
+  'start': () => {
+    const name = ($('#onb-name').value || '').trim();
+    if (!name) { toast('Dis-moi ton prénom 🙂'); $('#onb-name').focus(); return; }
+    const cur = curWeek();
+    if (!state.goals) {
+      const mk = (o, t) => Object.assign({ id: rid(), createdWeek: cur, archivedWeek: null, injuries: [], targetHistory: [{ from: cur, target: t }] }, o);
+      saveGoals([
+        mk({ name: 'Lire', emoji: '📖', cat: 'reading', type: 'quantity', unit: 'pages', activities: [], distance: false }, 100),
+        mk({ name: 'Cardio', emoji: '🏃', cat: 'sport', type: 'count', unit: 'séances', activities: ['Course', 'Natation'], distance: true }, 3),
+        mk({ name: 'Musculation', emoji: '🏋️', cat: 'sport', type: 'count', unit: 'séances', activities: [], distance: false }, 3),
+      ]);
+    }
+    saveProfile({ name, photo: null, startWeek: cur, createdAt: Date.now() });
+  },
+  'add': el => openEntrySheet(el.dataset.id),
+  'toggle-day': el => toggleDay(el.dataset.id, el.dataset.date),
+  'del-entry': el => deleteEntry(el.dataset.id),
+  'close-sheet': () => closeSheet(),
+  'pick-date': el => { entryDraft.date = el.dataset.val; renderEntrySheet(); },
+  'pick-act': el => { entryDraft.activity = entryDraft.activity === el.dataset.val ? '' : el.dataset.val; renderEntrySheet(); },
+  'save-entry': () => saveEntry(),
+  'new-goal': () => openGoalEditor(null),
+  'edit-goal': el => openGoalEditor(el.dataset.id),
+  'emoji': el => { readGoalForm(); goalDraft.emoji = el.dataset.val; $('#ge-emoji').value = el.dataset.val; },
+  'seg': el => {
+    readGoalForm();
+    const f = el.dataset.field, v = el.dataset.val;
+    if (goalDraft[f] === v) return;
+    goalDraft[f] = v;
+    goalDraft.unit = defaultUnit(goalDraft.type, goalDraft.cat);
+    if (goalDraft.type === 'daily' && goalDraft.target > 7) goalDraft.target = 7;
+    if (f === 'cat' && v === 'reading' && goalDraft.type === 'count') { goalDraft.type = 'quantity'; goalDraft.unit = 'pages'; goalDraft.target = Math.max(goalDraft.target, 50); }
+    renderGoalEditor();
+  },
+  'step': el => {
+    readGoalForm();
+    const t = goalDraft.target, inc = +el.dataset.val * (t >= 50 ? 10 : 1);
+    goalDraft.target = Math.max(1, t + inc);
+    if (goalDraft.type === 'daily') goalDraft.target = Math.min(7, goalDraft.target);
+    $('#ge-target').value = goalDraft.target;
+  },
+  'toggle-injury': () => toggleInjury(),
+  'archive-goal': () => archiveGoal(),
+  'save-goal': () => saveGoal(),
+  'move-goal': el => {
+    const cur = curWeek(), items = clone(goalsList());
+    const vis = items.filter(g => !g.archivedWeek || cur < g.archivedWeek);
+    const i = vis.findIndex(g => g.id === el.dataset.id), j = i + +el.dataset.dir;
+    if (j < 0 || j >= vis.length) return;
+    const a = items.indexOf(vis[i]), b = items.indexOf(vis[j]);
+    [items[a], items[b]] = [items[b], items[a]];
+    saveGoals(items);
+  },
+  'restore-goal': el => {
+    const items = clone(goalsList()), g = items.find(x => x.id === el.dataset.id);
+    g.archivedWeek = null; if (g.createdWeek > curWeek()) g.createdWeek = curWeek();
+    saveGoals(items); toast('Objectif restauré');
+  },
+  'edit-profile': () => openProfileEditor(),
+  'export': () => exportBackup(),
+  'import': () => {
+    openSheet(`<div class="sh-title"><div class="t">Restaurer</div></div>
+      <div class="hint" style="margin:0 0 14px">Choisis le fichier de sauvegarde, ou colle son contenu. <b style="color:var(--ko)">Les données actuelles seront remplacées.</b></div>
+      <label class="btn quiet" style="margin-bottom:12px">Choisir un fichier<input type="file" id="imp-file" accept=".json,.txt,application/json,text/plain" hidden></label>
+      <textarea class="inp" id="imp-text" style="height:140px;padding:12px;font-size:12px" placeholder="…ou colle la sauvegarde ici"></textarea>
+      <button class="btn" data-act="do-import" style="margin-top:12px">Restaurer</button>`);
+  },
+  'do-import': () => doImport($('#imp-text').value),
+  'remove-photo': () => { photoDraft = null; renderProfileEditor(); },
+  'save-profile': () => {
+    const name = ($('#pe-name').value || '').trim();
+    if (!name) { toast('Ton prénom ne peut pas être vide'); return; }
+    const p = clone(state.profile); p.name = name; p.photo = photoDraft;
+    closeSheet(); saveProfile(p); toast('Profil mis à jour');
+  },
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const fn = ACTIONS[el.dataset.act]; if (fn) { e.preventDefault(); fn(el, e); }
+});
+async function exportBackup() {
+  const data = JSON.stringify({ app: 'Resolio', v: 1, exportedAt: new Date().toISOString(), profile: state.profile, goals: state.goals ? { items: state.goals } : null, weeks: state.weeks });
+  const name = 'resolio-sauvegarde-' + todayKey() + '.json';
+  if (IS_APP) {
+    try {
+      const w = await plugin('Filesystem').writeFile({ path: name, data, directory: 'CACHE', encoding: 'utf8' });
+      await plugin('Share').share({ title: 'Sauvegarde Resolio', dialogTitle: 'Sauvegarder Resolio', files: [w.uri] });
+    } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast('Export impossible'); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function doImport(txt) {
+  let d;
+  try { d = JSON.parse(String(txt || '').trim()); } catch (e) { toast('Sauvegarde illisible'); return; }
+  if (!d || !d.profile || !d.weeks) { toast('Ce n\'est pas une sauvegarde Resolio'); return; }
+  store.replaceAll(d).then(() => { toast('Sauvegarde restaurée'); setTimeout(() => location.reload(), 600); }, () => toast('Restauration impossible'));
+}
+document.addEventListener('change', async e => {
+  if (e.target.id === 'imp-file' && e.target.files[0]) { try { doImport(await e.target.files[0].text()); } catch (err) { toast('Fichier illisible'); } return; }
+  if (e.target.id === 'pe-photo' && e.target.files[0]) {
+    try { photoDraft = await resizeImage(e.target.files[0]); renderProfileEditor(); }
+    catch (err) { toast('Impossible de lire cette image'); }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'onb-name') ACTIONS.start();
+  if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('en-') && e.target.id !== 'en-book') { e.preventDefault(); saveEntry(); }
+});
+window.flfBack = () => {
+  if (sheetOpen()) { closeSheet(); return true; }
+  if (state.profile && tab !== 'semaine') { tab = 'semaine'; render(); window.scrollTo(0, 0); return true; }
+  return false;
+};
+window.flfResume = () => { if (curWeek() !== lastWeekSeen) lastWeekSeen = curWeek(); maintenance(); render(); };
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
+
+/* ============ boot ============ */
+(async function boot() {
+  if (IS_APP) {
+    try {
+      const App = plugin('App');
+      App.addListener('backButton', () => { if (!window.flfBack()) App.exitApp(); });
+      App.addListener('resume', () => window.flfResume());
+      App.getInfo().then(i => { APP_VERSION = i.version; if (tab === 'profil') render(); }).catch(() => {});
+    } catch (e) {}
+  }
+  store = await initStore();
+  const slowT = setTimeout(() => { state.slow = true; render(); }, 10000);
+  store.start((kind, val, confirmed) => {
+    if (kind === 'profile') { state.profile = val; state.got.p = true; }
+    if (kind === 'goals') { state.goals = val ? (val.items || []) : null; state.got.g = true; }
+    if (kind === 'weeks') { state.weeks = val || {}; state.got.w = true; if (confirmed) state.confirmed = true; }
+    if (state.got.p && state.got.g && state.got.w && state.confirmed) { clearTimeout(slowT); state.slow = false; }
+    render();
+    maintenance();
+  }, err => { clearTimeout(slowT); toast('Données inaccessibles pour le moment.'); });
+})();
+</script>
+</body>
+</html>

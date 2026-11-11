@@ -1,0 +1,20 @@
+{
+  "appId": "com.quentinfayolle.resolio",
+  "appName": "Resolio",
+  "webDir": "www",
+  "backgroundColor": "#0d0d0f",
+  "android": {
+    "backgroundColor": "#0d0d0f"
+  },
+  "ios": {
+    "backgroundColor": "#0d0d0f",
+    "contentInset": "never"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

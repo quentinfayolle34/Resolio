@@ -1,0 +1,95 @@
+name: Android APK
+
+# Fabrique l'APK :
+#  - à chaque push sur main  -> APK téléchargeable dans l'onglet "Actions" (artefact)
+#  - à chaque tag vX.Y.Z     -> APK publié dans "Releases" (lien à partager)
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Synchroniser Capacitor (www -> android)
+        run: npx cap sync android
+
+      - name: Numéro de version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            NAME="${GITHUB_REF_NAME#v}"
+          else
+            NAME="$(node -p "require('./package.json').version")-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Version : $NAME (code ${GITHUB_RUN_NUMBER})"
+
+      - name: Préparer la clé de signature
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RESOLIO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/resolio.keystore"
+            echo "RESOLIO_KEYSTORE_PATH=$RUNNER_TEMP/resolio.keystore" >> "$GITHUB_ENV"
+            echo "SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secret RESOLIO_KEYSTORE_BASE64 absent : APK de debug (ne pourra pas mettre à jour une version signée)."
+            echo "SIGNED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compiler l'APK
+        working-directory: android
+        env:
+          RESOLIO_KEYSTORE_PASSWORD: ${{ secrets.RESOLIO_KEYSTORE_PASSWORD }}
+          RESOLIO_KEY_ALIAS: ${{ secrets.RESOLIO_KEY_ALIAS }}
+          RESOLIO_KEY_PASSWORD: ${{ secrets.RESOLIO_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          TASK=assembleDebug
+          [ "$SIGNED" = "true" ] && TASK=assembleRelease
+          ./gradlew "$TASK" --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=${{ steps.version.outputs.name }}
+          mkdir -p ../dist
+          if [ "$SIGNED" = "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "../dist/Resolio-${{ steps.version.outputs.name }}.apk"
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk "../dist/Resolio-${{ steps.version.outputs.name }}-debug.apk"
+          fi
+          ls -la ../dist
+
+      - name: Mettre l'APK à disposition (onglet Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Resolio-${{ steps.version.outputs.name }}
+          path: dist/*.apk
+
+      - name: Publier la Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Resolio ${{ steps.version.outputs.name }}
+          files: dist/*.apk
+          generate_release_notes: true
