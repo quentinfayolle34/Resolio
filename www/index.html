@@ -243,7 +243,7 @@ function makeLocalStore() {
   // Sur téléphone : plugin Preferences (stockage natif, fiable sur Android et iOS).
   // Dans le navigateur (développement) : localStorage.
   const KEY = LOCAL_KEY;
-  let blob = { profile: null, goals: null, weeks: {} };
+  let blob = { profile: null, goals: null, weeks: {}, sync: null };
   const read = async () => {
     try {
       if (IS_APP) { const r = await plugin('Preferences').get({ key: KEY }); return r && r.value; }
@@ -269,33 +269,376 @@ function makeLocalStore() {
     async start(on) {
       const raw = await read();
       if (raw) { try { blob = Object.assign(blob, JSON.parse(raw)); } catch (e) {} }
-      on('profile', blob.profile); on('goals', blob.goals); on('weeks', blob.weeks || {}, true);
+      on('sync', blob.sync); on('profile', blob.profile); on('goals', blob.goals); on('weeks', blob.weeks || {}, true);
     },
     save(name, data) {
       if (name === 'profile') blob.profile = clone(data);
       else if (name === 'goals') blob.goals = clone(data);
+      else if (name === 'sync') blob.sync = clone(data);
       else blob.weeks[name.slice(5)] = clone(data);
       persist();
     },
-    async replaceAll(data) { blob = { profile: data.profile || null, goals: data.goals || null, weeks: data.weeks || {} }; await persist(); }
+    // Remplace les données (restauration, ou données du compte) en gardant l'état de synchronisation.
+    async replaceAll(data) { blob = { profile: data.profile || null, goals: data.goals || null, weeks: data.weeks || {}, sync: blob.sync }; await persist(); }
   };
 }
 
 async function initStore() { return makeLocalStore(); }
 
 /* ============ state ============ */
-const state = { profile: null, goals: null, weeks: {}, got: { p: false, g: false, w: false }, confirmed: false, slow: false };
+const state = { profile: null, goals: null, weeks: {}, sync: null, syncBusy: false, got: { p: false, g: false, w: false }, confirmed: false, slow: false };
 let store;
 const TABS = ['semaine', 'historique', 'objectifs', 'profil'];
 let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'semaine';
 let lastWeekSeen = curWeek();
 
-const saveGoals = items => { state.goals = items; store.save('goals', { items }); render(); };
-const saveWeek = (k, doc) => { state.weeks[k] = doc; store.save('week:' + k, doc); render(); };
-const saveProfile = p => { state.profile = p; store.save('profile', p); render(); };
+const saveGoals = items => { items.forEach((g, i) => { g.position = i; }); state.goals = items; store.save('goals', { items }); markDirty('goals'); render(); };
+const saveWeek = (k, doc) => { state.weeks[k] = doc; store.save('week:' + k, doc); markDirty('weeks', k); render(); };
+const saveProfile = p => { state.profile = p; store.save('profile', p); markDirty('profile'); render(); };
 const weekDoc = k => state.weeks[k] || { week: k, entries: [], closed: false };
 const goalsList = () => state.goals || [];
 const goalById = id => goalsList().find(g => g.id === id);
+
+
+/* ============ compte & synchronisation (serveur PocketBase) ============
+ * Principe : le téléphone reste la source de vérité au quotidien (tout marche hors ligne).
+ * Chaque modification est marquée "à envoyer" (dirty), puis runSync() :
+ *   1. envoie les changements locaux (profil, objectifs, semaines + leurs enregistrements),
+ *   2. récupère ce qui a changé sur le serveur depuis la dernière fois (autres appareils).
+ * Les enregistrements supprimés sont marqués deleted=true côté serveur (pour que les autres appareils le sachent).
+ */
+const SYNC_DEFAULT = () => ({
+  url: '', token: '', userId: '', email: '', lastPull: '', lastSync: 0, refreshedAt: 0, error: '',
+  dirty: { profile: false, goals: false, weeks: [] },
+  srv: { goals: {}, weeks: {}, entries: {} },   // correspondance identifiant local -> identifiant serveur
+  avatarSig: '', avatarFile: ''
+});
+const syncOn = () => !!(state.sync && state.sync.url && state.sync.token);
+const saveSync = () => { if (store && state.sync) store.save('sync', state.sync); };
+function markDirty(kind, key) {
+  if (!syncOn()) return;
+  const d = state.sync.dirty;
+  if (kind === 'weeks') { if (!d.weeks.includes(key)) d.weeks.push(key); }
+  else d[kind] = true;
+  saveSync(); scheduleSync();
+}
+function markAllDirty() {
+  state.sync.dirty = { profile: !!state.profile, goals: !!state.goals, weeks: Object.keys(state.weeks).sort() };
+}
+function normalizeUrl(u) {
+  u = String(u || '').trim().replace(/\/+$/, '');
+  if (u && !/^https?:\/\//i.test(u)) u = 'http://' + u;
+  return u;
+}
+
+class ApiError extends Error { constructor(status, message, data) { super(message); this.status = status; this.data = data; } }
+async function api(path, opts = {}) {
+  const base = opts.base || state.sync.url;
+  const headers = {};
+  if (opts.auth !== false && state.sync.token) headers.Authorization = state.sync.token;
+  let body;
+  if (opts.form) body = opts.form;
+  else if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.body); }
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 15000);
+  let res;
+  try { res = await fetch(base + '/api/' + path, { method: opts.method || 'GET', headers, body, signal: ctl.signal }); }
+  catch (e) { throw new ApiError(0, 'Serveur injoignable'); }
+  finally { clearTimeout(t); }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new ApiError(res.status, (data && data.message) || ('Erreur ' + res.status), data && data.data);
+  return data;
+}
+async function listAll(coll, filter) {
+  const out = [];
+  for (let page = 1; page < 200; page++) {
+    const r = await api(`collections/${coll}/records?perPage=500&page=${page}&sort=updated&skipTotal=1` + (filter ? '&filter=' + encodeURIComponent(filter) : ''));
+    out.push(...r.items);
+    if (r.items.length < 500) break;
+  }
+  return out;
+}
+// Crée ou met à jour un enregistrement, en retrouvant celui qui existe déjà si besoin.
+async function upsert(coll, map, key, body, findFilter) {
+  const id = map[key];
+  if (id) {
+    try { await api(`collections/${coll}/records/${id}`, { method: 'PATCH', body }); return id; }
+    catch (e) { if (e.status !== 404) throw e; delete map[key]; }
+  }
+  try {
+    const r = await api(`collections/${coll}/records`, { method: 'POST', body: Object.assign({ user: state.sync.userId }, body) });
+    return (map[key] = r.id);
+  } catch (e) {
+    if (e.status !== 400) throw e;
+    const ex = await api(`collections/${coll}/records?perPage=1&skipTotal=1&filter=${encodeURIComponent(findFilter)}`);
+    if (!ex.items[0]) throw e;
+    map[key] = ex.items[0].id;
+    await api(`collections/${coll}/records/${map[key]}`, { method: 'PATCH', body });
+    return map[key];
+  }
+}
+
+const goalToRec = g => ({
+  cid: g.id, name: g.name, emoji: g.emoji || '', cat: g.cat || 'other', type: g.type || 'count', unit: g.unit || '',
+  activities: g.activities || [], distance: !!g.distance, created_week: g.createdWeek || '', archived_week: g.archivedWeek || '',
+  position: g.position || 0, target_history: g.targetHistory || [], injuries: g.injuries || [], deleted: false
+});
+const recToGoal = r => ({
+  id: r.cid, name: r.name, emoji: r.emoji || '🎯', cat: r.cat || 'other', type: r.type || 'count', unit: r.unit || '',
+  activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
+  position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
+});
+const entryToRec = (e, k) => ({
+  cid: e.id, goal_cid: e.goalId, week: k, date: e.date, cat: e.cat || 'other', amount: e.amount || 0, book: e.book || '',
+  activity: e.activity || '', duration: e.duration || 0, distance: e.distance || 0, note: e.note || '', at: e.at || 0, deleted: false
+});
+function recToEntry(r) {
+  const e = { id: r.cid, goalId: r.goal_cid, cat: r.cat || 'other', date: r.date, at: r.at || 0, amount: r.amount || 0 };
+  if (r.book) e.book = r.book;
+  if (r.activity) e.activity = r.activity;
+  if (r.duration) e.duration = r.duration;
+  if (r.distance) e.distance = r.distance;
+  if (r.note) e.note = r.note;
+  return e;
+}
+const photoSig = ph => ph ? ph.length + ':' + ph.slice(-40) : '';
+
+async function pushAll() {
+  const S = state.sync, D = S.dirty;
+  if (D.profile && state.profile) {
+    const p = state.profile;
+    await api(`collections/users/records/${S.userId}`, { method: 'PATCH', body: { name: p.name || '', start_week: p.startWeek || '' } });
+    const sig = photoSig(p.photo);
+    if (sig !== S.avatarSig) {
+      const fd = new FormData();
+      if (p.photo) fd.append('avatar', await (await fetch(p.photo)).blob(), 'avatar.jpg');
+      else fd.append('avatar', '');
+      const r = await api(`collections/users/records/${S.userId}`, { method: 'PATCH', form: fd });
+      S.avatarSig = sig; S.avatarFile = r.avatar || '';
+    }
+    D.profile = false; saveSync();
+  }
+  if (D.goals && state.goals) {
+    for (const g of state.goals) await upsert('goals', S.srv.goals, g.id, goalToRec(g), `cid = "${g.id}"`);
+    D.goals = false; saveSync();
+  }
+  while (D.weeks.length) {
+    await pushWeek(D.weeks[0]);
+    D.weeks.shift(); saveSync();
+  }
+}
+async function pushWeek(k) {
+  const S = state.sync, w = state.weeks[k];
+  if (!w) return;
+  await upsert('weeks', S.srv.weeks, k, { week: k, closed: !!w.closed, result: w.result || null, recap_seen: !!w.recapSeen }, `week = "${k}"`);
+  const local = new Set();
+  for (const e of (w.entries || [])) {
+    local.add(e.id);
+    const known = S.srv.entries[e.id];
+    if (known && !known.deleted) continue;
+    const m = known ? { [e.id]: known.id } : {};
+    const id = await upsert('entries', m, e.id, entryToRec(e, k), `cid = "${e.id}"`);
+    S.srv.entries[e.id] = { id, week: k, deleted: false };
+  }
+  for (const [cid, known] of Object.entries(S.srv.entries)) {
+    if (known.week !== k || known.deleted || local.has(cid)) continue;
+    try { await api(`collections/entries/records/${known.id}`, { method: 'PATCH', body: { deleted: true } }); }
+    catch (e) { if (e.status !== 404) throw e; }
+    known.deleted = true;
+  }
+}
+
+async function fetchAvatar(u) {
+  try {
+    const res = await fetch(`${state.sync.url}/api/files/users/${u.id}/${encodeURIComponent(u.avatar)}?thumb=320x320`, { headers: { Authorization: state.sync.token } });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(blob); });
+  } catch (e) { return null; }
+}
+
+async function pullAll() {
+  const S = state.sync, D = S.dirty;
+  const filter = S.lastPull ? `updated >= "${S.lastPull}"` : '';
+  let maxU = S.lastPull;
+  const track = r => { if (r.updated > maxU) maxU = r.updated; };
+  const u = await api(`collections/users/records/${S.userId}`);
+  const goals = await listAll('goals', filter); goals.forEach(track);
+  const weeks = await listAll('weeks', filter); weeks.forEach(track);
+  const entries = await listAll('entries', filter); entries.forEach(track);
+
+  // profil
+  if (!D.profile && (u.start_week || state.profile)) {
+    const p = state.profile ? clone(state.profile) : { name: '', photo: null, createdAt: Date.parse(String(u.created).replace(' ', 'T')) || Date.now() };
+    p.name = u.name || p.name || String(u.email || '').split('@')[0];
+    p.startWeek = u.start_week || p.startWeek || curWeek();
+    if ((u.avatar || '') !== S.avatarFile) {
+      p.photo = u.avatar ? await fetchAvatar(u) : null;
+      S.avatarFile = u.avatar || ''; S.avatarSig = photoSig(p.photo);
+    }
+    if (JSON.stringify(p) !== JSON.stringify(state.profile)) { state.profile = p; store.save('profile', p); }
+  }
+  // objectifs
+  if (goals.length) {
+    const items = clone(goalsList());
+    for (const r of goals) {
+      S.srv.goals[r.cid] = r.id;
+      if (D.goals) continue;
+      const i = items.findIndex(g => g.id === r.cid);
+      if (r.deleted) { if (i >= 0) items.splice(i, 1); continue; }
+      if (i >= 0) items[i] = recToGoal(r); else items.push(recToGoal(r));
+    }
+    if (!D.goals) {
+      items.sort((a, b) => (a.position || 0) - (b.position || 0));
+      state.goals = items; store.save('goals', { items });
+    }
+  }
+  // semaines + enregistrements
+  const changed = new Map();
+  const docFor = k => { if (!changed.has(k)) changed.set(k, clone(state.weeks[k] || { week: k, entries: [], closed: false })); return changed.get(k); };
+  for (const r of weeks) {
+    S.srv.weeks[r.week] = r.id;
+    if (D.weeks.includes(r.week)) continue;
+    const doc = docFor(r.week);
+    doc.closed = !!(r.closed || doc.closed);
+    if (r.result) doc.result = r.result;
+    doc.recapSeen = !!(r.recap_seen || doc.recapSeen);
+  }
+  for (const r of entries) {
+    S.srv.entries[r.cid] = { id: r.id, week: r.week, deleted: !!r.deleted };
+    if (D.weeks.includes(r.week)) continue;
+    const doc = docFor(r.week);
+    doc.entries = doc.entries || [];
+    const i = doc.entries.findIndex(e => e.id === r.cid);
+    if (r.deleted) { if (i >= 0) doc.entries.splice(i, 1); }
+    else if (i < 0) doc.entries.push(recToEntry(r));
+  }
+  for (const [k, doc] of changed) {
+    if (doc.closed) {
+      const res = computeResult(k, doc);
+      if (JSON.stringify(res) !== JSON.stringify(doc.result || null)) { doc.result = res; if (!D.weeks.includes(k)) D.weeks.push(k); }
+    }
+    state.weeks[k] = doc; store.save('week:' + k, doc);
+  }
+  S.lastPull = maxU;
+}
+
+let syncing = false, syncAgain = false, syncTimer = null;
+function scheduleSync(ms = 1500) {
+  if (!syncOn()) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(() => runSync(false), ms);
+}
+async function runSync(manual) {
+  if (!syncOn()) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; state.syncBusy = true; render();
+  const S = state.sync;
+  try {
+    if (Date.now() - (S.refreshedAt || 0) > 6 * 3600e3) {
+      const r = await api('collections/users/auth-refresh', { method: 'POST' });
+      S.token = r.token; S.refreshedAt = Date.now();
+    }
+    await pushAll();
+    await pullAll();
+    if (state.sync.dirty.weeks.length) await pushAll();
+    S.error = ''; S.lastSync = Date.now();
+    if (manual) toast('Synchronisé ✓');
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) { S.token = ''; S.error = 'Session expirée : reconnecte-toi.'; }
+    else S.error = e.status === 0 ? 'Serveur injoignable' : (e.message || 'Erreur de synchronisation');
+    if (manual) toast(S.error);
+  } finally {
+    syncing = false; state.syncBusy = false; saveSync();
+    if (state.profile && state.goals) maintenance();
+    render();
+    if (syncAgain) { syncAgain = false; scheduleSync(300); }
+  }
+}
+function syncLabel() {
+  const S = state.sync;
+  if (!syncOn()) return S && S.error ? 'Déconnecté' : (IS_APP ? '' : 'Version web (dév.)');
+  if (state.syncBusy) return 'Synchro…';
+  return S.error ? 'Hors ligne' : '● Synchronisé';
+}
+function agoText(t) {
+  if (!t) return 'jamais';
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  if (m < 24 * 60) return `il y a ${Math.round(m / 60)} h`;
+  const d = new Date(t); return `le ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/* ---- connexion ---- */
+let loginMode = 'login', loginBusy = false, loginErr = '', pendingAccount = null;
+function openLogin() { loginErr = ''; renderLogin(); }
+function renderLogin() {
+  const v = id => { const el = $('#' + id); return el ? el.value : null; };
+  const url = v('lg-url') ?? (state.sync.url || ''), email = v('lg-email') ?? (state.sync.email || ''), pw = v('lg-pw') ?? '';
+  const create = loginMode === 'create';
+  openSheet(`<div class="sh-title"><div class="t">Mon compte Resolio</div></div>
+    <div class="seg" style="margin-bottom:18px"><button class="${!create ? 'on' : ''}" data-act="login-mode" data-val="login">Se connecter</button><button class="${create ? 'on' : ''}" data-act="login-mode" data-val="create">Créer un compte</button></div>
+    <div class="field"><label>Serveur</label><input class="inp" id="lg-url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://192.168.1.20:8090" value="${esc(url)}">
+      <div class="hint">L'adresse de ton serveur Resolio. Chez toi, sur le même Wi-Fi : <b>http://IP-de-ton-PC:8090</b></div></div>
+    <div class="field"><label>Email</label><input class="inp" id="lg-email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(email)}"></div>
+    <div class="field"><label>Mot de passe</label><input class="inp" id="lg-pw" type="password" autocomplete="${create ? 'new-password' : 'current-password'}" value="${esc(pw)}">${create ? '<div class="hint">8 caractères minimum.</div>' : ''}</div>
+    ${loginErr ? `<div class="hint" style="color:var(--ko);margin:-4px 0 14px">${esc(loginErr)}</div>` : ''}
+    <button class="btn" data-act="do-login" ${loginBusy ? 'disabled style="opacity:.6"' : ''}>${loginBusy ? 'Connexion…' : create ? 'Créer mon compte' : 'Se connecter'}</button>`);
+}
+async function doLogin() {
+  if (loginBusy) return;
+  const url = normalizeUrl($('#lg-url').value), email = $('#lg-email').value.trim(), pw = $('#lg-pw').value;
+  if (!url || !email || !pw) { loginErr = 'Remplis le serveur, l\'email et le mot de passe.'; renderLogin(); return; }
+  if (loginMode === 'create' && pw.length < 8) { loginErr = 'Le mot de passe doit faire au moins 8 caractères.'; renderLogin(); return; }
+  loginBusy = true; loginErr = ''; renderLogin();
+  try {
+    if (loginMode === 'create') {
+      await api('collections/users/records', { method: 'POST', base: url, auth: false,
+        body: { email, password: pw, passwordConfirm: pw, name: (state.profile && state.profile.name) || '' } });
+    }
+    const r = await api('collections/users/auth-with-password', { method: 'POST', base: url, auth: false, body: { identity: email, password: pw } });
+    const acc = Object.assign(SYNC_DEFAULT(), { url, token: r.token, userId: r.record.id, email: r.record.email || email, refreshedAt: Date.now() });
+    const prev = state.sync; state.sync = acc;
+    let serverHas = false;
+    try { const c = await api('collections/goals/records?perPage=1&filter=' + encodeURIComponent('deleted = false')); serverHas = c.totalItems > 0; }
+    catch (e) { state.sync = prev; throw e; }
+    state.sync = prev;
+    loginBusy = false;
+    if (serverHas && state.profile) { pendingAccount = acc; openReplaceConfirm(); return; }
+    await activateAccount(acc, serverHas ? 'server' : 'local');
+  } catch (e) {
+    loginBusy = false;
+    loginErr = e.status === 0 ? 'Serveur injoignable. Vérifie l\'adresse et que le serveur est lancé.'
+      : e.status === 400 && loginMode === 'login' ? 'Email ou mot de passe incorrect.'
+      : e.status === 400 ? 'Impossible de créer le compte (email déjà utilisé ?).'
+      : (e.message || 'Erreur');
+    renderLogin();
+  }
+}
+function openReplaceConfirm() {
+  openSheet(`<div class="sh-title"><div class="t">Ce compte a déjà des données</div></div>
+    <div class="muted" style="margin-bottom:18px">Les données de ce téléphone vont être <b style="color:var(--text)">remplacées</b> par celles de ton compte. Si tu veux les garder, annule et exporte d'abord une sauvegarde (onglet Profil).</div>
+    <button class="btn" data-act="use-server">Utiliser les données du compte</button>
+    <button class="btn danger" data-act="close-sheet" style="margin-top:8px">Annuler</button>`);
+}
+// mode 'server' : on repart des données du compte ; mode 'local' : on envoie les données du téléphone.
+async function activateAccount(acc, mode) {
+  state.sync = acc;
+  if (mode === 'server') {
+    state.profile = null; state.goals = null; state.weeks = {};
+    await store.replaceAll({});
+  } else markAllDirty();
+  saveSync();
+  closeSheet();
+  toast('Connecté ✓');
+  await runSync(false);
+  render();
+}
+function logout() {
+  const S = state.sync;
+  state.sync = Object.assign(SYNC_DEFAULT(), { url: S.url, email: S.email });
+  saveSync(); render(); toast('Déconnecté. Tes données restent sur ce téléphone.');
+}
 
 /* ============ goal logic ============ */
 const TYPE_INFO = {
@@ -355,6 +698,7 @@ function maintenance() {
       doc.recapSeen = k !== prev;
       state.weeks[k] = doc;
       store.save('week:' + k, doc);
+      markDirty('weeks', k);
     }
     k = addDays(k, 7);
   }
@@ -409,7 +753,7 @@ function ring(p) {
   return `<svg viewBox="0 0 64 64" class="ring"><circle cx="32" cy="32" r="${r}" class="ring-bg"/><circle cx="32" cy="32" r="${r}" class="ring-fg" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - Math.min(1, p))).toFixed(1)}" transform="rotate(-90 32 32)"/></svg>`;
 }
 function brand() {
-  const sync = IS_APP ? '' : 'Version web (dév.)';
+  const sync = syncLabel();
   return `<div class="brand"><span class="dot"></span>Resolio<span class="sync">${sync}</span></div>`;
 }
 function render() {
@@ -438,6 +782,7 @@ function viewOnboarding() {
     </div>
     <button class="btn" data-act="start">C'est parti</button>
     <div class="hint" style="text-align:center;margin-top:12px">Tu pourras les modifier et en ajouter d'autres.</div>
+    <button class="edit-link" data-act="open-login" style="display:block;margin:22px auto 0">J'ai déjà un compte Resolio</button>
   </div>`;
 }
 
@@ -497,7 +842,7 @@ function entryDesc(e, g) {
   if (e.distance) parts.push(fmt(e.distance) + ' km');
   return parts;
 }
-let pendingDel = null, pendingDelT;
+let pendingDel = null, pendingDelT, logoutConfirm = false;
 function entryRow(e) {
   const g = goalById(e.goalId);
   const parts = entryDesc(e, g);
@@ -573,6 +918,19 @@ function viewProfile() {
   const got = BADGES.filter(b => b.t(s)).length;
   h += `<h2>Badges <span class="muted" style="font-family:Inter;font-weight:600;font-size:14px">${got} / ${BADGES.length}</span></h2><div class="badges">` +
     BADGES.map(b => { const ok = b.t(s); return `<div class="badge ${ok ? 'got' : 'locked'}"><div class="b-e">${b.e}</div><div class="b-n">${b.n}</div><div class="b-d">${b.d}</div></div>`; }).join('') + `</div>`;
+  const S = state.sync;
+  if (syncOn()) {
+    h += `<h2>Compte</h2><div class="card" style="padding:16px">
+      <div style="font-weight:600">${esc(S.email)}</div>
+      <div class="muted" style="font-size:13px;word-break:break-all">${esc(S.url)}</div>
+      <div style="font-size:13.5px;margin:10px 0 14px;color:${S.error ? 'var(--ko)' : 'var(--muted)'}">${state.syncBusy ? 'Synchronisation…' : S.error ? esc(S.error) + ' · dernière synchro ' + agoText(S.lastSync) : 'Synchronisé ' + agoText(S.lastSync)}</div>
+      <button class="btn quiet" data-act="sync-now" style="margin-bottom:6px">Synchroniser maintenant</button>
+      <button class="btn danger ${logoutConfirm ? 'confirm' : ''}" data-act="logout">${logoutConfirm ? 'Confirmer la déconnexion' : 'Se déconnecter'}</button></div>`;
+  } else {
+    h += `<h2>Compte</h2><div class="card" style="padding:16px">
+      <div class="muted" style="font-size:13.5px;margin-bottom:14px">${S && S.error ? `<span style="color:var(--ko)">${esc(S.error)}</span><br>` : ''}Connecte-toi à ton serveur Resolio pour sauvegarder tes données en ligne et les retrouver sur tous tes appareils.</div>
+      <button class="btn quiet" data-act="open-login">${S && S.email ? 'Se reconnecter' : 'Se connecter ou créer un compte'}</button></div>`;
+  }
   h += `<h2>Sauvegarde</h2><div class="card" style="padding:16px">
     <div class="muted" style="font-size:13.5px;margin-bottom:14px">Tes données sont enregistrées sur ce téléphone. Fais une sauvegarde de temps en temps (Drive, mail…) pour ne rien perdre si tu changes de téléphone.</div>
     <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter une sauvegarde</button>
@@ -874,6 +1232,15 @@ const ACTIONS = {
     saveGoals(items); toast('Objectif restauré');
   },
   'edit-profile': () => openProfileEditor(),
+  'open-login': () => openLogin(),
+  'login-mode': el => { loginMode = el.dataset.val; loginErr = ''; renderLogin(); },
+  'do-login': () => doLogin(),
+  'use-server': () => { const a = pendingAccount; pendingAccount = null; if (a) activateAccount(a, 'server'); },
+  'sync-now': () => runSync(true),
+  'logout': () => {
+    if (!logoutConfirm) { logoutConfirm = true; render(); setTimeout(() => { logoutConfirm = false; render(); }, 3000); return; }
+    logoutConfirm = false; logout();
+  },
   'export': () => exportBackup(),
   'import': () => {
     openSheet(`<div class="sh-title"><div class="t">Restaurer</div></div>
@@ -913,6 +1280,7 @@ function doImport(txt) {
   let d;
   try { d = JSON.parse(String(txt || '').trim()); } catch (e) { toast('Sauvegarde illisible'); return; }
   if (!d || !d.profile || !d.weeks) { toast('Ce n\'est pas une sauvegarde Resolio'); return; }
+  if (syncOn()) { state.sync.dirty = { profile: true, goals: true, weeks: Object.keys(d.weeks).sort() }; saveSync(); }
   store.replaceAll(d).then(() => { toast('Sauvegarde restaurée'); setTimeout(() => location.reload(), 600); }, () => toast('Restauration impossible'));
 }
 document.addEventListener('change', async e => {
@@ -931,7 +1299,9 @@ window.flfBack = () => {
   if (state.profile && tab !== 'semaine') { tab = 'semaine'; render(); window.scrollTo(0, 0); return true; }
   return false;
 };
-window.flfResume = () => { if (curWeek() !== lastWeekSeen) lastWeekSeen = curWeek(); maintenance(); render(); };
+window.flfResume = () => { if (curWeek() !== lastWeekSeen) lastWeekSeen = curWeek(); maintenance(); render(); scheduleSync(300); };
+window.addEventListener('online', () => scheduleSync(500));
+setInterval(() => { if (!document.hidden) runSync(false); }, 5 * 60e3);
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
 
 /* ============ boot ============ */
@@ -947,9 +1317,10 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
   store = await initStore();
   const slowT = setTimeout(() => { state.slow = true; render(); }, 10000);
   store.start((kind, val, confirmed) => {
+    if (kind === 'sync') { state.sync = Object.assign(SYNC_DEFAULT(), val || {}); return; }
     if (kind === 'profile') { state.profile = val; state.got.p = true; }
     if (kind === 'goals') { state.goals = val ? (val.items || []) : null; state.got.g = true; }
-    if (kind === 'weeks') { state.weeks = val || {}; state.got.w = true; if (confirmed) state.confirmed = true; }
+    if (kind === 'weeks') { state.weeks = val || {}; state.got.w = true; if (confirmed) { state.confirmed = true; scheduleSync(300); } }
     if (state.got.p && state.got.g && state.got.w && state.confirmed) { clearTimeout(slowT); state.slow = false; }
     render();
     maintenance();
