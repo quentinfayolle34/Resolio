@@ -6,6 +6,7 @@ Application mobile de résolutions par jour / semaine / mois / année, en **fran
 - Toute l'app est dans `www/index.html` : HTML + CSS + JavaScript vanilla, **sans bundler ni framework**. Garder ce choix sauf demande explicite.
 - Les plugins Capacitor sont appelés sans import : `plugin('Preferences')`, `plugin('App')`, `plugin('Browser')`, `plugin('Share')`, `plugin('Filesystem')` (helper basé sur `window.Capacitor`). Un plugin ajouté doit aussi être installé avec npm puis `npx cap sync`.
 - `IS_APP` est vrai dans l'app native ; dans le navigateur (`npm run dev`) tout doit aussi fonctionner.
+- **App web** publiée sur GitHub Pages (`https://quentinfayolle34.github.io/Resolio/`, workflow `pages.yml` à chaque push sur `main`) à partir du même `www/`. Chemins **relatifs** obligatoires (servi sous `/Resolio/`). PWA : `manifest.webmanifest`, `sw.js` (cache des fichiers de l'app seulement, réseau d'abord, Supabase jamais intercepté ; version du cache remplacée au déploiement), icônes `www/icons` générées par `scripts/generate-icons.py`, bouton « Installer » dans le Profil (`installCard`). Sur le web : catégorie Temps d'écran masquée à la création (`screenPlugin()` nul), retour de connexion par `?code=` (PKCE, `detectSessionInUrl`) et `?reset=1`, retour sur l'onglet = `flfResume()`.
 
 ## Données : Supabase uniquement (dossier `supabase/`)
 - L'app est **100 % en ligne** : aucune donnée métier stockée sur le téléphone (seule la session Supabase, via Preferences). Ne pas réintroduire de stockage local des données.

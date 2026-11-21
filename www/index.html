@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d0d0f">
 <title>Resolio</title>
+<meta name="description" content="Tes résolutions du jour, de la semaine, du mois et de l'année — avec tes amis.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Resolio">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
 :root{
@@ -1019,7 +1027,7 @@ function periodStats(p) {
 setInterval(() => {
   if (todayKey() !== lastWeekSeen) { lastWeekSeen = todayKey(); maintenance(); render(); }   // minuit : nouvelle période
 }, 30000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWeekSeen = todayKey(); reloadData(false); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) return; if (IS_APP) { lastWeekSeen = todayKey(); reloadData(false); } else window.flfResume(); });
 
 /* ============ stats & badges ============ */
 function computeStats() {
@@ -1372,6 +1380,8 @@ function viewProfile() {
     <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter mes données</button>
     <button class="btn quiet" data-act="import" style="margin-bottom:6px">Importer une sauvegarde</button>
     <button class="btn danger" data-act="delete-account">Supprimer mon compte</button></div>`;
+  const inst = installCard();
+  if (inst) h += `<h2>Application</h2>` + inst;
   h += `<div class="foot">Resolio${APP_VERSION ? ' · v' + esc(APP_VERSION) : ''}</div>`;
   return h;
 }
@@ -1585,8 +1595,9 @@ function renderGoalEditor() {
        <div class="hint">${{ day: 'À tenir chaque jour, remis à zéro à minuit.', week: 'À tenir sur la semaine, remis à zéro le lundi.', month: 'À tenir sur le mois, remis à zéro le 1er.', year: "À tenir sur l'année, remis à zéro le 1er janvier." }[d.period]}</div></div>`
     : `<div class="field"><label>Période et catégorie</label><div class="hint" style="margin:0">${P[d.period].tab} · ${CATS[d.cat] ? CATS[d.cat].label : 'Autre'} (elles ne se changent pas après la création)</div></div>`;
   // 2. catégorie
-  if (d._new) h += `<div class="field"><label>Catégorie</label><div class="chips">${Object.entries(CATS).map(([k, c]) =>
-    `<button class="chip ${d.cat === k ? 'on' : ''}" data-act="ge-cat" data-val="${k}">${c.emoji} ${c.label}</button>`).join('')}</div></div>`;
+  if (d._new) h += `<div class="field"><label>Catégorie</label><div class="chips">${Object.entries(CATS).filter(([k]) => k !== 'screen' || screenPlugin()).map(([k, c]) =>
+    `<button class="chip ${d.cat === k ? 'on' : ''}" data-act="ge-cat" data-val="${k}">${c.emoji} ${c.label}</button>`).join('')}</div>
+    ${screenPlugin() ? '' : `<div class="hint">📱 Le temps d'écran se crée depuis l'application Android (le navigateur n'y a pas accès).</div>`}</div>`;
   // 3. nom
   const ph = { reading: 'ex. Lire', sport: 'ex. Courir', meditation: 'ex. Méditer', reduce: d.subtype === 'cigarette' ? 'ex. Moins fumer' : "ex. Moins d'alcool", other: "ex. Boire de l'eau" }[d.cat] || '';
   h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="${esc(ph)}" maxlength="40"></div>
@@ -2356,9 +2367,11 @@ const ACTIONS = {
   'share-code': async () => {
     const txt = `Ajoute-moi sur Resolio ! Mon code ami : ${state.profile.friendCode}`;
     if (IS_APP) { try { await plugin('Share').share({ title: 'Mon code ami Resolio', text: txt, dialogTitle: 'Partager mon code' }); return; } catch (e) {} }
+    if (!IS_APP && navigator.share) { try { await navigator.share({ title: 'Mon code ami Resolio', text: txt }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
     try { await navigator.clipboard.writeText(state.profile.friendCode); toast('Code copié : ' + state.profile.friendCode); } catch (e) { toast('Ton code : ' + state.profile.friendCode); }
   },
   'add-friend': () => addFriend(),
+  'install-app': async () => { if (!installEvt) return; const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (x) {} render(); },
   'accept-friend': el => friendshipAction('accept', el.dataset.id),
   'remove-friendship': el => friendshipAction('remove', el.dataset.id),
   'open-friend': el => { if (el.dataset.id) { removeFriendConfirm = null; openFriendProfile(el.dataset.id); } },
@@ -2454,6 +2467,23 @@ window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false).then(() 
 window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
 window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
+
+/* ============ app web : installation et fonctionnement hors appli ============ */
+let installEvt = null;
+const IS_STANDALONE = !IS_APP && (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (tab === 'profil') render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('Resolio est installée 🎉'); if (tab === 'profil') render(); });
+function installCard() {
+  if (IS_APP || IS_STANDALONE) return '';
+  if (installEvt) return `<div class="card" style="padding:16px"><div class="muted" style="font-size:13.5px;margin-bottom:14px">Ajoute Resolio sur ton écran d'accueil : elle s'ouvre en plein écran, comme une vraie appli.</div>
+    <button class="btn" data-act="install-app">Installer Resolio</button></div>`;
+  if (IS_IOS) return `<div class="card" style="padding:16px;font-size:14px;line-height:1.5">Pour l'installer sur ton iPhone : dans Safari, touche <b>Partager</b> <span class="muted">(carré avec une flèche)</span> puis <b>Sur l'écran d'accueil</b>.</div>`;
+  return '';
+}
+if (!IS_APP && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e)));
+}
 
 /* ============ boot ============ */
 (async function boot() {
