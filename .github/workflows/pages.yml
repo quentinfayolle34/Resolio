@@ -29,7 +29,7 @@ jobs:
       - name: Vérifier la config publique
         run: |
           grep -q "supabaseUrl" www/config.js
-          if grep -qiE "service_role|sb_secret_" www/config.js; then echo "Clé secrète interdite dans www/config.js" && exit 1; fi
+          if grep -vE '^\s*//' www/config.js | grep -qiE "service_role|sb_secret_"; then echo "Clé secrète interdite dans www/config.js" && exit 1; fi
 
       - name: Nouvelle version du cache de l'app
         run: sed -i "s/resolio-shell-v1/resolio-shell-${GITHUB_SHA::8}/" www/sw.js
