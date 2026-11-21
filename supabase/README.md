@@ -48,6 +48,7 @@ Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **
 - **Site URL** : `com.quentinfayolle.resolio://auth-callback`
 - **Redirect URLs** → *Add URL* :
   - `com.quentinfayolle.resolio://**` (retour dans l'app : Google, confirmation d'email, mot de passe oublié)
+  - `https://quentinfayolle34.github.io/Resolio/**` (l'app web, même chose dans le navigateur)
   - `http://localhost:5173/**` (tests dans le navigateur avec `npm run dev`)
 
 **Authentication → Sign In / Providers → Email**

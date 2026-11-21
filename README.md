@@ -15,6 +15,17 @@ Toutes les données sont dans une base **Supabase** (une seule base pour tous le
 
 ---
 
+## Utiliser l'app web (tous les téléphones et ordinateurs)
+
+Ouvre **https://quentinfayolle34.github.io/Resolio/** et connecte-toi avec ton compte (le même que dans l'app Android : même base Supabase).
+
+- **Android (Chrome)** : Profil → *Installer Resolio* (ou menu ⋮ → *Installer l'application*).
+- **iPhone (Safari)** : *Partager* → *Sur l'écran d'accueil*.
+
+L'app web fait tout sauf le **Temps d'écran** (un navigateur ne peut pas le lire) : il reste dans l'APK Android, et les résolutions déjà créées s'affichent aussi sur le web avec les chiffres envoyés par le téléphone.
+
+Mise en ligne : automatique à chaque mise à jour de `main` (workflow `.github/workflows/pages.yml`). À faire une seule fois : *Settings → Pages → Source : GitHub Actions*, puis ajouter l'adresse dans Supabase (voir [supabase/README.md](supabase/README.md), section 2).
+
 ## Télécharger l'application (Android)
 
 1. Ouvre l'onglet **[Releases](../../releases)** du dépôt et télécharge le fichier `Resolio-x.y.z.apk` de la dernière version.

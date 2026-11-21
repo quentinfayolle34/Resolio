@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère l'icône Resolio (cible jaune sur fond sombre) et l'écran de démarrage Android.
+"""Génère l'icône Resolio (cible jaune sur fond sombre) : Android (icônes + écran de démarrage) et app web (www/icons).
 
 Usage : python3 scripts/generate-icons.py   (nécessite Pillow : pip install pillow)
 """
@@ -54,7 +54,13 @@ def main():
         t = min(w, h) // 4
         im.alpha_composite(render(t, "none", 0.5, transparent=True), ((w - t) // 2, (h - t) // 2))
         im.convert("RGB").save(path)
-    print("Icônes et écrans de démarrage générés.")
+    web = os.path.join(ROOT, "www", "icons")
+    os.makedirs(web, exist_ok=True)
+    render(192, "square", 0.30).save(os.path.join(web, "icon-192.png"))
+    render(512, "square", 0.30).save(os.path.join(web, "icon-512.png"))
+    render(512, "square", 0.24).save(os.path.join(web, "maskable-512.png"))  # zone sûre Android (cercle de 80 %)
+    render(180, "square", 0.30).convert("RGB").save(os.path.join(web, "apple-touch-icon.png"))
+    print("Icônes (Android + web) et écrans de démarrage générés.")
 
 
 if __name__ == "__main__":
