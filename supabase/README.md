@@ -48,7 +48,6 @@ Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **
 - **Site URL** : `com.quentinfayolle.resolio://auth-callback`
 - **Redirect URLs** → *Add URL* :
   - `com.quentinfayolle.resolio://**` (retour dans l'app : Google, confirmation d'email, mot de passe oublié)
-  - `https://quentinfayolle34.github.io/Resolio/**` (l'app web, même chose dans le navigateur)
   - `http://localhost:5173/**` (tests dans le navigateur avec `npm run dev`)
 
 **Authentication → Sign In / Providers → Email**
@@ -84,6 +83,30 @@ Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **
 ### Comment ça marche dans l'app
 
 « Continuer avec Google » ouvre la page Google dans le navigateur du téléphone ; une fois connecté, Google renvoie vers `com.quentinfayolle.resolio://auth-callback`, qui rouvre Resolio, connecté. Les liens des emails (confirmation, mot de passe oublié) utilisent le même mécanisme : **ouvre-les sur le téléphone où Resolio est installé**.
+
+---
+
+## 3 bis. Connexion avec Apple (iPhone)
+
+Apple l'exige dans l'app iPhone parce qu'il y a la connexion Google. Nécessite le compte Apple Developer.
+
+### a) Côté Apple (developer.apple.com → Certificates, Identifiers & Profiles)
+
+1. **Identifiers → +** → *Services IDs* → description `Resolio Connexion`, identifiant `com.quentinfayolle.resolio.auth` → coche **Sign in with Apple** → *Configure* :
+   - Primary App ID : `com.quentinfayolle.resolio`
+   - Domains : `dtvmkqeohhlwwviphnkz.supabase.co`
+   - Return URLs : `https://dtvmkqeohhlwwviphnkz.supabase.co/auth/v1/callback`
+2. **Keys → +** → nom `Resolio Sign in with Apple`, coche **Sign in with Apple** (App ID `com.quentinfayolle.resolio`) → télécharge le fichier `.p8` et note le **Key ID**.
+
+### b) Côté Supabase
+
+**Authentication → Sign In / Providers → Apple** → active-le :
+- *Client IDs* : `com.quentinfayolle.resolio.auth`
+- *Secret Key* : la clé secrète générée à partir du `.p8` (Team ID + Key ID + Services ID) avec l'outil indiqué sur cette page de Supabase. ⚠️ Elle **expire tous les 6 mois** : pense à la régénérer.
+
+> Le `.p8` et la clé secrète restent uniquement chez Apple et dans Supabase, jamais dans l'app ni sur GitHub.
+
+Le bouton « Continuer avec Apple » fonctionne ensuite comme Google (page Apple, puis retour dans l'app par `com.quentinfayolle.resolio://auth-callback`). Apple ne transmet pas toujours le prénom : l'app le demande au premier lancement.
 
 ---
 

@@ -16,3 +16,9 @@ dist/
 Thumbs.db
 .idea/
 *.log
+
+# Clés Apple (jamais dans le dépôt)
+*.p8
+*.p12
+*.mobileprovision
+*.cer
