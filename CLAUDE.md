@@ -1,18 +1,18 @@
 # Resolio — notes pour Claude
 
-Application mobile de résolutions par jour / semaine / mois / année, en **français**. Projet **Capacitor 8** (Android aujourd'hui, iOS prévu).
+Application mobile de résolutions par jour / semaine / mois / année, en **français**. Projet **Capacitor 8** : Android (`android/`) et iPhone (`ios/`), pas de version web publiée.
 
 ## Architecture
 - Toute l'app est dans `www/index.html` : HTML + CSS + JavaScript vanilla, **sans bundler ni framework**. Garder ce choix sauf demande explicite.
 - Les plugins Capacitor sont appelés sans import : `plugin('Preferences')`, `plugin('App')`, `plugin('Browser')`, `plugin('Share')`, `plugin('Filesystem')` (helper basé sur `window.Capacitor`). Un plugin ajouté doit aussi être installé avec npm puis `npx cap sync`.
 - `IS_APP` est vrai dans l'app native ; dans le navigateur (`npm run dev`) tout doit aussi fonctionner.
-- **App web** publiée sur GitHub Pages (`https://quentinfayolle34.github.io/Resolio/`, workflow `pages.yml` à chaque push sur `main`) à partir du même `www/`. Chemins **relatifs** obligatoires (servi sous `/Resolio/`). PWA : `manifest.webmanifest`, `sw.js` (cache des fichiers de l'app seulement, réseau d'abord, Supabase jamais intercepté ; version du cache remplacée au déploiement), icônes `www/icons` générées par `scripts/generate-icons.py`, bouton « Installer » dans le Profil (`installCard`). Sur le web : catégorie Temps d'écran masquée à la création (`screenPlugin()` nul), retour de connexion par `?code=` (PKCE, `detectSessionInUrl`) et `?reset=1`, retour sur l'onglet = `flfResume()`.
+- **iOS** : projet `ios/` (Swift Package Manager, iPhone seulement, portrait, français). `Info.plist` : schéma `com.quentinfayolle.resolio` (retour de connexion), textes d'autorisation appareil photo / photos. Construit par `.github/workflows/ios.yml` sur macOS (compilation à chaque push ; signature automatique + envoi TestFlight sur tag `v*` avec les secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`). `IS_ANDROID` / `IS_IOS_APP` : Temps d'écran seulement sur Android (`screenPlugin()` nul ailleurs) ; bouton « Continuer avec Apple » (`backend.signInApple`, OAuth Supabase `apple`) seulement sur iPhone (obligatoire pour l'App Store, règle 4.8). Icône iOS : 1024 px opaque générée par `scripts/generate-icons.py`.
 
 ## Données : Supabase uniquement (dossier `supabase/`)
 - L'app est **100 % en ligne** : aucune donnée métier stockée sur le téléphone (seule la session Supabase, via Preferences). Ne pas réintroduire de stockage local des données.
 - Config publique dans `www/config.js` (URL + clé publishable). Jamais de clé `service_role`/`secret` dans le dépôt.
 - Bibliothèque : `www/vendor/supabase.js` (UMD, `window.supabase`), mise à jour par `npm run vendor`.
-- Tout l'accès serveur passe par l'objet `backend` (`createSupabaseBackend()`), interface : auth (`signIn`, `signUp`, `signInGoogle`, `handleDeepLink`, `resetPassword`, `updatePassword`, `signOut`, `deleteAccount`) + données (`loadAll`, `saveProfile`, `addUserSport`, `upsertScreenTime`, `uploadAvatar`, `upsertGoals`, `upsertWeeks`, `insertEntries`, `deleteEntries`, `replaceAllData`) + amis (`loadSocial`, `loadPosts`, `findByCode`, `requestFriend`, `acceptFriend`, `removeFriendship`, `uploadPostPhoto`, `createPost`, `deletePost`, `setPostLike`, `publishResult`, `loadResults`, `setResultLike`, `savePublicStats`). Les tests remplacent cet objet par `window.__RESOLIO_TEST_BACKEND__`.
+- Tout l'accès serveur passe par l'objet `backend` (`createSupabaseBackend()`), interface : auth (`signIn`, `signUp`, `signInGoogle`, `signInApple`, `handleDeepLink`, `resetPassword`, `updatePassword`, `signOut`, `deleteAccount`) + données (`loadAll`, `saveProfile`, `addUserSport`, `upsertScreenTime`, `uploadAvatar`, `upsertGoals`, `upsertWeeks`, `insertEntries`, `deleteEntries`, `replaceAllData`) + amis (`loadSocial`, `loadPosts`, `findByCode`, `requestFriend`, `acceptFriend`, `removeFriendship`, `uploadPostPhoto`, `createPost`, `deletePost`, `setPostLike`, `publishResult`, `loadResults`, `setResultLike`, `savePublicStats`). Les tests remplacent cet objet par `window.__RESOLIO_TEST_BACKEND__`.
 - État en mémoire (`state.profile`, `state.goals`, `state.weeks`) chargé par `loadData()`. Écritures : `saveGoals` / `saveWeek` / `saveProfile` mettent à jour l'écran puis envoient via `write()` (file d'attente ; en cas d'échec : message + rechargement depuis la base). `saveWeek` calcule les enregistrements ajoutés/supprimés.
 - `state.phase` : `loading` | `config` | `auth` | `offline` | `setup` (configuration pas terminée : `profile.startWeek` vide) | `app`.
 - Premier lancement (`viewSetup`) : prénom / nom puis l'utilisateur ajoute **lui-même** ses résolutions (aucune résolution par défaut) ; « C'est parti » exige au moins une résolution et enregistre `startWeek`.
@@ -42,8 +42,9 @@ Application mobile de résolutions par jour / semaine / mois / année, en **fran
 - `npm run dev` : tester dans le navigateur (http://localhost:5173) — URL à autoriser dans Supabase
 - `npx cap sync android` : copier `www/` dans le projet Android après une modification
 - `npm run android` : ouvrir dans Android Studio
+- `npx cap sync ios` : copier `www/` dans le projet iOS (Xcode seulement sur Mac ; sinon la CI construit l'app)
 - Icônes : `python3 scripts/generate-icons.py`
 
 ## Publication
-- Version dans `package.json`, puis tag `vX.Y.Z` → GitHub Actions publie l'APK signé dans Releases.
-- Ne jamais committer de keystore (`*.keystore`, `*.jks`) ni de mot de passe.
+- Version dans `package.json`, puis tag `vX.Y.Z` → GitHub Actions publie l'APK signé dans Releases et envoie l'app iPhone sur TestFlight.
+- Ne jamais committer de keystore (`*.keystore`, `*.jks`), de clé Apple (`*.p8`, `*.p12`, `*.mobileprovision`) ni de mot de passe.

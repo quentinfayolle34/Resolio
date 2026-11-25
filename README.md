@@ -15,17 +15,6 @@ Toutes les données sont dans une base **Supabase** (une seule base pour tous le
 
 ---
 
-## Utiliser l'app web (tous les téléphones et ordinateurs)
-
-Ouvre **https://quentinfayolle34.github.io/Resolio/** et connecte-toi avec ton compte (le même que dans l'app Android : même base Supabase).
-
-- **Android (Chrome)** : Profil → *Installer Resolio* (ou menu ⋮ → *Installer l'application*).
-- **iPhone (Safari)** : *Partager* → *Sur l'écran d'accueil*.
-
-L'app web fait tout sauf le **Temps d'écran** (un navigateur ne peut pas le lire) : il reste dans l'APK Android, et les résolutions déjà créées s'affichent aussi sur le web avec les chiffres envoyés par le téléphone.
-
-Mise en ligne : automatique à chaque mise à jour de `main` (workflow `.github/workflows/pages.yml`). À faire une seule fois : *Settings → Pages → Source : GitHub Actions*, puis ajouter l'adresse dans Supabase (voir [supabase/README.md](supabase/README.md), section 2).
-
 ## Télécharger l'application (Android)
 
 1. Ouvre l'onglet **[Releases](../../releases)** du dépôt et télécharge le fichier `Resolio-x.y.z.apk` de la dernière version.
@@ -50,7 +39,7 @@ resources/icon.png        Icône source 1024×1024
 .github/workflows/        Fabrication automatique de l'APK sur GitHub
 ```
 
-Le même dossier `www/` servira pour iPhone : il suffira d'ajouter la plateforme iOS (voir plus bas).
+Le même dossier `www/` sert aussi à l'app iPhone (voir plus bas).
 
 ---
 
@@ -120,14 +109,37 @@ Android n'accepte une mise à jour que si elle est signée avec **la même clé*
 
 ---
 
-## Plus tard : iPhone
+## iPhone (App Store / TestFlight)
 
-```bash
-npm install @capacitor/ios
-npx cap add ios
-npx cap open ios   # nécessite un Mac avec Xcode
-```
+Le projet iOS est dans `ios/` (même code `www/` que l'APK). **Pas besoin de Mac** : GitHub Actions construit l'app sur ses Mac (workflow `.github/workflows/ios.yml`).
 
-Il faudra aussi un compte **Apple Developer** (≈ 99 €/an) pour installer l'app durablement et la partager via **TestFlight**. La fabrication peut aussi se faire sur GitHub Actions (machines macOS).
+- À chaque push sur `main` / pull request : vérification que l'app compile.
+- À chaque **release `vX.Y.Z`** (ou *Actions → iOS → Run workflow*) : l'app est signée et envoyée sur **App Store Connect → TestFlight**.
 
-Pour la connexion Google et les liens des emails, il faudra déclarer le schéma `com.quentinfayolle.resolio` dans Xcode (*URL Types*).
+Différences avec Android : pas de **Temps d'écran** (Apple ne donne pas accès à ces chiffres) ; bouton **« Continuer avec Apple »** en plus (obligatoire sur iPhone dès qu'il y a la connexion Google).
+
+### À faire une seule fois (côté Apple)
+
+1. **Compte Apple Developer** (99 $/an, ≈ 99 €) : https://developer.apple.com/programs/enroll/ — inscription en tant que *personne physique*, validation sous 1 à 2 jours.
+2. **Identifiant de l'app** : developer.apple.com → *Certificates, Identifiers & Profiles → Identifiers → +* → *App IDs* → Bundle ID `com.quentinfayolle.resolio`, coche **Sign in with Apple**.
+3. **Fiche de l'app** : https://appstoreconnect.apple.com → *Apps → + → Nouvelle app* : iOS, nom *Resolio*, langue *Français*, bundle ID `com.quentinfayolle.resolio`, SKU `resolio`.
+4. **Clé API pour GitHub** : App Store Connect → *Utilisateurs et accès → Intégrations → App Store Connect API → Clés d'équipe → +*, rôle **Admin** (nécessaire pour que GitHub crée lui-même le certificat de signature). Télécharge le fichier `AuthKey_XXXX.p8` (une seule fois possible) et note l'**Issuer ID** affiché en haut.
+5. **Secrets GitHub** (*Settings → Secrets and variables → Actions*) :
+
+   | Secret | Valeur |
+   |---|---|
+   | `APPLE_TEAM_ID` | developer.apple.com → *Membership* → Team ID (10 caractères) |
+   | `ASC_KEY_ID` | l'ID de la clé (ex. `2X9R4HXF34`) |
+   | `ASC_ISSUER_ID` | l'Issuer ID |
+   | `ASC_KEY_P8_BASE64` | le fichier `.p8` en base64 : sur Windows, PowerShell → `[Convert]::ToBase64String([IO.File]::ReadAllBytes("AuthKey_XXXX.p8")) \| Set-Clipboard` |
+
+   ⚠️ Le fichier `.p8` ne va **jamais** dans le dépôt : uniquement dans ces secrets.
+6. **Connexion avec Apple** : voir [supabase/README.md](supabase/README.md), section 3 bis.
+
+### Installer sur ton iPhone (TestFlight)
+
+Crée une release `vX.Y.Z` comme pour Android → après ~15 min, la build apparaît dans App Store Connect → *TestFlight*. Ajoute-toi (et tes amis, jusqu'à 100 testeurs internes ou 10 000 externes) comme testeurs, puis installe l'app **TestFlight** sur l'iPhone et accepte l'invitation.
+
+### Publier sur l'App Store
+
+Dans la fiche de l'app : captures d'écran iPhone, description, **URL de politique de confidentialité** (obligatoire), questionnaire de confidentialité et classification d'âge, puis *Soumettre pour vérification* (en général 1 à 3 jours).

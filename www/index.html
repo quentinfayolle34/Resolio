@@ -5,14 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d0d0f">
 <title>Resolio</title>
-<meta name="description" content="Tes résolutions du jour, de la semaine, du mois et de l'année — avec tes amis.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Resolio">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
 :root{
@@ -292,6 +284,8 @@ nav button.on svg{stroke:var(--accent)}
 /* connexion */
 .auth{justify-content:flex-start;padding-top:8vh}
 .btn.google{background:#fff;color:#1f1f1f;gap:10px}
+.btn.apple{background:#fff;color:#000;gap:10px;margin-bottom:10px}
+.btn.apple svg{width:18px;height:18px;margin-top:-3px}
 .or{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:13px;margin:18px 0}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .link-btn{color:var(--muted);font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:6px 0}
@@ -438,12 +432,14 @@ function createSupabaseBackend() {
       if (d.user && Array.isArray(d.user.identities) && d.user.identities.length === 0) { const e = new Error('User already registered'); e.code = 'user_already_exists'; throw e; }
       return { needsConfirm: !d.session };
     },
-    async signInGoogle() {
+    async signInGoogle() { await this.signInOAuth('google'); },
+    async signInApple() { await this.signInOAuth('apple'); },   // exigé par Apple sur iPhone dès qu'il y a la connexion Google
+    async signInOAuth(provider) {
       if (IS_APP) {
-        const d = chk(await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl('auth'), skipBrowserRedirect: true } }));
+        const d = chk(await sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectUrl('auth'), skipBrowserRedirect: true } }));
         await plugin('Browser').open({ url: d.url });
       } else {
-        chk(await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectUrl('auth') } }));
+        chk(await sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectUrl('auth') } }));
       }
     },
     // Retour d'un lien (Google, email de confirmation, mot de passe oublié) : com.quentinfayolle.resolio://...?code=...
@@ -662,7 +658,9 @@ function errText(e) {
 }
 
 /* ---- temps d'écran : lu sur le téléphone (module Android ScreenTime), enregistré dans la base ---- */
-const screenPlugin = () => window.__SCREEN_TIME_TEST__ || (IS_APP ? plugin('ScreenTime') : null);
+const IS_ANDROID = IS_APP && CAP.getPlatform && CAP.getPlatform() === 'android';
+const IS_IOS_APP = IS_APP && CAP.getPlatform && CAP.getPlatform() === 'ios';
+const screenPlugin = () => window.__SCREEN_TIME_TEST__ || (IS_ANDROID ? plugin('ScreenTime') : null);   // Android seulement : Apple ne donne pas accès au temps d'écran
 const hasScreenGoals = () => goalsList().some(g => g.cat === 'screen' && !isArchived(g));
 const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
 let screenSyncing = null;
@@ -718,12 +716,15 @@ async function importIntoAccount(d) {
 /* ---- écrans de connexion ---- */
 let authMode = 'login', authBusy = false, authErr = '', authInfo = '';
 const authDraft = { email: '', password: '', firstName: '', lastName: '' };
+const APPLE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.37 12.8c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.15.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.38-3.67zM14.1 6.03c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.66 1.37-.58.67-1.1 1.76-.96 2.8 1.01.08 2.05-.52 2.68-1.28z"/></svg>';
 const GOOGLE_ICON = '<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 function viewAuth() {
   const d = authDraft, busy = authBusy ? 'disabled style="opacity:.6"' : '';
   const err = authErr ? `<div class="auth-msg ko">${esc(authErr)}</div>` : '';
   const info = authInfo ? `<div class="auth-msg">${esc(authInfo)}</div>` : '';
-  const google = `<button class="btn google" data-act="auth-google" ${busy}>${GOOGLE_ICON}Continuer avec Google</button><div class="or"><span>ou</span></div>`;
+  const apple = IS_IOS_APP || window.__SHOW_APPLE_LOGIN__
+    ? `<button class="btn apple" data-act="auth-apple" ${busy}>${APPLE_ICON}Continuer avec Apple</button>` : '';
+  const google = apple + `<button class="btn google" data-act="auth-google" ${busy}>${GOOGLE_ICON}Continuer avec Google</button><div class="or"><span>ou</span></div>`;
   const email = `<div class="field"><label>Email</label><input class="inp" id="au-email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${esc(d.email)}"></div>`;
   let h = `<div class="onb auth"><div class="logo">Resoli<span>o</span></div><p>Tes objectifs de la semaine. Pas d'excuses.</p>`;
   if (authMode === 'login') {
@@ -778,6 +779,7 @@ async function authAction(kind) {
     }
     else if (kind === 'forgot') { await backend.resetPassword(d.email); authInfo = 'Lien envoyé ! Regarde tes mails (et les spams).'; }
     else if (kind === 'google') await backend.signInGoogle();
+    else if (kind === 'apple') await backend.signInApple();
   } catch (e) { authErr = errText(e); }
   authBusy = false; render();
 }
@@ -1380,8 +1382,6 @@ function viewProfile() {
     <button class="btn quiet" data-act="export" style="margin-bottom:10px">Exporter mes données</button>
     <button class="btn quiet" data-act="import" style="margin-bottom:6px">Importer une sauvegarde</button>
     <button class="btn danger" data-act="delete-account">Supprimer mon compte</button></div>`;
-  const inst = installCard();
-  if (inst) h += `<h2>Application</h2>` + inst;
   h += `<div class="foot">Resolio${APP_VERSION ? ' · v' + esc(APP_VERSION) : ''}</div>`;
   return h;
 }
@@ -1597,7 +1597,7 @@ function renderGoalEditor() {
   // 2. catégorie
   if (d._new) h += `<div class="field"><label>Catégorie</label><div class="chips">${Object.entries(CATS).filter(([k]) => k !== 'screen' || screenPlugin()).map(([k, c]) =>
     `<button class="chip ${d.cat === k ? 'on' : ''}" data-act="ge-cat" data-val="${k}">${c.emoji} ${c.label}</button>`).join('')}</div>
-    ${screenPlugin() ? '' : `<div class="hint">📱 Le temps d'écran se crée depuis l'application Android (le navigateur n'y a pas accès).</div>`}</div>`;
+    ${screenPlugin() ? '' : `<div class="hint">📱 Le temps d'écran se crée depuis l'application Android (l'iPhone et le navigateur n'y donnent pas accès).</div>`}</div>`;
   // 3. nom
   const ph = { reading: 'ex. Lire', sport: 'ex. Courir', meditation: 'ex. Méditer', reduce: d.subtype === 'cigarette' ? 'ex. Moins fumer' : "ex. Moins d'alcool", other: "ex. Boire de l'eau" }[d.cat] || '';
   h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="${esc(ph)}" maxlength="40"></div>
@@ -2258,6 +2258,7 @@ const ACTIONS = {
   'auth-signup': () => authAction('signup'),
   'auth-forgot': () => authAction('forgot'),
   'auth-google': () => authAction('google'),
+  'auth-apple': () => authAction('apple'),
   'add': el => openEntrySheet(el.dataset.id),
   'toggle-day': el => toggleDay(el.dataset.id, el.dataset.date),
   'del-entry': el => deleteEntry(el.dataset.id),
@@ -2371,7 +2372,6 @@ const ACTIONS = {
     try { await navigator.clipboard.writeText(state.profile.friendCode); toast('Code copié : ' + state.profile.friendCode); } catch (e) { toast('Ton code : ' + state.profile.friendCode); }
   },
   'add-friend': () => addFriend(),
-  'install-app': async () => { if (!installEvt) return; const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (x) {} render(); },
   'accept-friend': el => friendshipAction('accept', el.dataset.id),
   'remove-friendship': el => friendshipAction('remove', el.dataset.id),
   'open-friend': el => { if (el.dataset.id) { removeFriendConfirm = null; openFriendProfile(el.dataset.id); } },
@@ -2467,23 +2467,6 @@ window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false).then(() 
 window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
 window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
-
-/* ============ app web : installation et fonctionnement hors appli ============ */
-let installEvt = null;
-const IS_STANDALONE = !IS_APP && (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
-const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (tab === 'profil') render(); });
-window.addEventListener('appinstalled', () => { installEvt = null; toast('Resolio est installée 🎉'); if (tab === 'profil') render(); });
-function installCard() {
-  if (IS_APP || IS_STANDALONE) return '';
-  if (installEvt) return `<div class="card" style="padding:16px"><div class="muted" style="font-size:13.5px;margin-bottom:14px">Ajoute Resolio sur ton écran d'accueil : elle s'ouvre en plein écran, comme une vraie appli.</div>
-    <button class="btn" data-act="install-app">Installer Resolio</button></div>`;
-  if (IS_IOS) return `<div class="card" style="padding:16px;font-size:14px;line-height:1.5">Pour l'installer sur ton iPhone : dans Safari, touche <b>Partager</b> <span class="muted">(carré avec une flèche)</span> puis <b>Sur l'écran d'accueil</b>.</div>`;
-  return '';
-}
-if (!IS_APP && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e)));
-}
 
 /* ============ boot ============ */
 (async function boot() {
