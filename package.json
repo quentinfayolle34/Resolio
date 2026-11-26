@@ -19,6 +19,7 @@
     "@capacitor/ios": "^8.6.2",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.3",
+    "@capgo/capacitor-health": "^8.13.0",
     "@supabase/supabase-js": "^2.119.0"
   },
   "devDependencies": {

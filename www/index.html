@@ -207,7 +207,7 @@ nav button.on svg{stroke:var(--accent)}
 .recap-hero .t{font-family:Archivo;font-weight:900;font-size:28px;letter-spacing:-.02em;margin-top:6px}
 .recap-hero.ok .t{color:var(--accent)}
 
-#toast{position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw;text-align:center}
+#toast{z-index:60 !important;position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* onboarding / loading */
@@ -221,6 +221,49 @@ nav button.on svg{stroke:var(--accent)}
 .loading{min-height:70vh;display:grid;place-items:center;color:var(--muted);text-align:center}
 .pulse{width:14px;height:14px;background:var(--accent);border-radius:4px;transform:rotate(45deg);animation:p 1s infinite alternate;margin:0 auto 14px}
 @keyframes p{to{opacity:.25;transform:rotate(225deg)}}
+
+/* page plein écran : assistant de création / modification */
+.page{position:fixed;inset:0;z-index:30;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;display:none}
+.page.open{display:block}
+.wz{min-height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto;padding:calc(6px + var(--safe-t)) 18px 0}
+.wz-top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;background:var(--bg);padding:6px 0 10px}
+.wz-nav{width:44px;height:44px;border-radius:22px;display:grid;place-items:center;font-size:24px;color:var(--muted);flex:none}
+.wz-nav:active{background:var(--surface2)}
+.wz-title{flex:1;text-align:center;font-family:Archivo;font-weight:800;font-size:17px}
+.wz-prog{flex:1;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.wz-prog i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .25s}
+.wz-body{flex:1;padding-bottom:24px}
+.wz-step{color:var(--muted);font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-top:10px}
+.wz-q{font-family:Archivo;font-weight:900;font-size:30px;letter-spacing:-.02em;line-height:1.1;margin:8px 0 6px}
+.wz-sub{color:var(--muted);font-size:15px;margin:0 0 4px}
+.wz-in{margin-top:22px}
+.wz-cards{display:flex;flex-direction:column;gap:10px}
+.wz-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wz-card{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:14px 16px;border-radius:18px;background:var(--surface);text-align:left;border:1.5px solid transparent}
+.wz-card.on{border-color:var(--accent);background:var(--accent-soft)}
+.wz-card:not(:disabled):active{background:var(--surface2)}
+.wz-card:disabled{opacity:.4}
+.wz-grid .wz-card{flex-direction:column;align-items:flex-start;gap:8px;min-height:104px}
+.wz-ic{font-size:26px;line-height:1;width:30px;text-align:center;flex:none}
+.wz-grid .wz-ic{text-align:left}
+.wz-card.on .wz-ic{color:var(--accent);font-weight:900}
+.wz-ct{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wz-ct b{font-size:16px;font-weight:700}
+.wz-ct small{color:var(--muted);font-size:12.5px;line-height:1.3}
+.wz-foot{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 22%);padding:22px 0 calc(16px + var(--safe-b))}
+.wz-info{padding:14px 16px;font-size:14.5px;line-height:1.45}
+.wz-sum{background:var(--surface);border-radius:18px;padding:6px 16px}
+.wz-sum-h{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:18px}
+.wz-sum-h span{font-size:30px}
+.wz-sum-r{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.wz-sum-r:last-child{border-bottom:0}
+.wz-sum-r span:first-child{color:var(--muted)}
+.wz-sum-r span:last-child{text-align:right;font-weight:600}
+.wz .trow{margin-bottom:12px}
+.wz .trow .tl small{color:var(--muted);font-weight:500}
+.inp.big-name{height:60px;font-size:19px}
+.emojis button.on{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.wz.edit .wz-body{padding-top:6px}
 
 /* calendrier */
 .cal{background:var(--surface);border-radius:var(--r);padding:12px 12px 14px;margin-top:16px}
@@ -338,6 +381,7 @@ nav button.on svg{stroke:var(--accent)}
 <div id="overlay" data-act="close-sheet"></div>
 <div id="sheet"></div>
 <div id="retro" class="retro"></div>
+<div id="page" class="page"></div>
 <div id="toast"></div>
 
 <script src="vendor/supabase.js"></script>
@@ -391,18 +435,19 @@ function redirectUrl(kind) {
 const profileFromRow = (r, user) => ({
   firstName: r.first_name || '', lastName: r.last_name || '', name: r.first_name || '',
   photo: r.avatar_url || null, birthDate: r.birth_date || '', city: r.city || '',
-  startWeek: r.start_week || null, recaps: r.recaps || {}, friendCode: r.friend_code || '', publicStats: r.public_stats || {},
+  startWeek: r.start_week || null, recaps: r.recaps || {}, goalMarks: r.goal_marks || {}, friendCode: r.friend_code || '', publicStats: r.public_stats || {},
   retroSeen: r.retro_seen || {}, retroPublished: r.retro_published || {}, createdAt: Date.parse(r.created_at) || Date.now(),
   email: (user && user.email) || ''
 });
 const profileToRow = p => ({
   first_name: (p.firstName || '').trim(), last_name: (p.lastName || '').trim(), avatar_url: p.photo || null,
   birth_date: p.birthDate || null, city: (p.city || '').trim() || null, start_week: p.startWeek || null,
-  recaps: p.recaps || {}, retro_seen: p.retroSeen || {}, retro_published: p.retroPublished || {}
+  recaps: p.recaps || {}, goal_marks: p.goalMarks || {}, retro_seen: p.retroSeen || {}, retro_published: p.retroPublished || {}
 });
 const goalFromRow = r => ({
+  ...(r.cat === 'sport' ? { cat: r.subtype === 'muscu' ? 'muscu' : 'cardio' } : {}),   // ancienne catégorie Sport (si la migration n'est pas passée)
   id: r.id, period: r.period || 'week', metrics: Array.isArray(r.metrics) && r.metrics.length ? r.metrics : undefined,
-  subtype: r.subtype || null, isLimit: !!r.is_limit, shared: r.shared !== false, name: r.name, emoji: r.emoji || '🎯', cat: r.cat, type: r.type, unit: r.unit || '',
+  subtype: r.subtype || null, isLimit: !!r.is_limit, shared: r.shared !== false, name: r.name, emoji: r.emoji || '🎯', cat: r.cat === 'sport' ? (r.subtype === 'muscu' ? 'muscu' : 'cardio') : r.cat, type: r.type, unit: r.unit || '',
   activities: r.activities || [], distance: !!r.distance, createdWeek: r.created_week, archivedWeek: r.archived_week || null,
   position: r.position || 0, targetHistory: r.target_history || [], injuries: r.injuries || []
 });
@@ -506,7 +551,12 @@ function createSupabaseBackend() {
         sb.from('sports').select('name,kind').order('name').then(chk),
         sb.from('user_sports').select('name,kind').order('name').then(chk),
       ]);
-      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {}, sports: mergeSports(sports, mySports), screen: {} };
+      const out = { profile: profileFromRow(prow || {}, user), goals: goals.map(goalFromRow), weeks: {}, sports: mergeSports(sports, mySports), screen: {}, steps: {} };
+      // pas des 400 derniers jours (table absente tant que la migration n'est pas passée : on ignore)
+      try {
+        const st = chk(await sb.from('daily_steps').select('date,steps').gte('date', addDays(todayKey(), -400)).order('date').range(0, 999));
+        for (const r of st) out.steps[r.date] = num(r.steps);
+      } catch (e) { console.warn('pas', e); }
       // temps d'écran des 400 derniers jours
       const since = addDays(todayKey(), -400);
       for (let from = 0; ; from += 1000) {
@@ -568,6 +618,7 @@ function createSupabaseBackend() {
     },
     async savePublicStats(uid, stats) { chk(await sb.from('profiles').update({ public_stats: stats }).eq('id', uid)); },
 
+    async upsertSteps(uid, rows) { chk(await sb.from('daily_steps').upsert(rows.map(r => ({ user_id: uid, date: r.date, steps: r.steps, updated_at: new Date().toISOString() })), { onConflict: 'user_id,date' })); },
     async upsertScreenTime(rows) { for (const c of chunks(rows)) chk(await sb.from('screen_time').upsert(c, { onConflict: 'user_id,date,package' })); },
     async addUserSport(name, kind) { chk(await sb.from('user_sports').insert({ name, kind })); },
     async uploadAvatar(uid, blob) {
@@ -639,16 +690,16 @@ async function loadData() {
   state.phase = 'loading'; state.loadErr = ''; render();
   try {
     const d = await backend.loadAll(state.user);
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || [], screen: d.screen || {} });
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || [], screen: d.screen || {}, steps: d.steps || {} });
     state.phase = d.profile.startWeek ? 'app' : 'setup';
-    if (state.phase === 'app') await withTimeout(syncScreenTime(), 8000);   // avant les bilans : le temps d'écran d'hier doit être à jour
+    if (state.phase === 'app') await withTimeout(Promise.all([syncScreenTime(), syncSteps()]), 8000);   // avant les bilans : temps d'écran et pas d'hier à jour
     if (state.phase === 'setup') state.legacy = await readLegacyData();
   } catch (e) {
     console.error(e);
     state.phase = 'offline'; state.loadErr = errText(e);
   }
   render(); maintenance();
-  if (state.phase === 'app') { publishResults(); publishPublicStats(); loadSocial(); if (!sheetOpen()) maybeAutoRetro(); }
+  if (state.phase === 'app') { checkSyncedGoals(); publishResults(); publishPublicStats(); loadSocial(); if (!sheetOpen()) { if (!flushDonePrompts()) maybeAutoRetro(); } }
 }
 // Recharge sans écran de chargement (retour dans l'app, ou après une erreur d'écriture)
 async function reloadData(force) {
@@ -656,8 +707,8 @@ async function reloadData(force) {
   try {
     const d = await backend.loadAll(state.user);
     if (!force && pendingWrites) return;
-    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || state.sports || [], screen: Object.assign({}, d.screen || {}, state.screen || {}) });
-    await withTimeout(syncScreenTime(), 8000);
+    Object.assign(state, { profile: d.profile, goals: d.goals, weeks: d.weeks, sports: d.sports || state.sports || [], screen: Object.assign({}, d.screen || {}, state.screen || {}), steps: Object.assign({}, d.steps || {}, state.steps || {}) });
+    await withTimeout(Promise.all([syncScreenTime(), syncSteps()]), 8000);
     if (state.phase === 'offline') state.phase = d.profile.startWeek ? 'app' : 'setup';
     render(); maintenance();
   } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
@@ -826,18 +877,27 @@ async function authAction(kind) {
  */
 const TYPE_INFO = {
   count: { label: 'Nombre de fois', sub: 'ex. 3 fois' },
+  time: { label: 'Temps', sub: 'ex. 30 min' },
   quantity: { label: 'Quantité', sub: 'ex. 20 verres d\'eau' },
   daily: { label: 'Chaque jour', sub: 'ex. 5 jours sur 7' },
   once: { label: 'Une fois', sub: 'à cocher' }
 };
+// Ordre = ordre de l'assistant. « sport » : ancienne catégorie (convertie en cardio / muscu), plus proposée.
 const CATS = {
-  reading:    { label: 'Lecture',    emoji: '📖', metrics: ['pages', 'time', 'count'], multi: true },
-  sport:      { label: 'Sport',      emoji: '💪', metrics: ['count', 'time', 'distance'], multi: true },
-  meditation: { label: 'Méditation', emoji: '🧘', metrics: ['time', 'count'], multi: false },
-  reduce:     { label: 'Réduire',    emoji: '🚭', metrics: ['limit'], multi: false },
-  screen:     { label: "Temps d'écran", emoji: '📱', metrics: ['limit'], multi: false },
-  other:      { label: 'Autre',      emoji: '✨' },
+  muscu:      { label: 'Musculation',   emoji: '🏋️', metrics: ['count', 'time'], multi: true, name: 'Musculation', sub: 'Séances, temps' },
+  cardio:     { label: 'Cardio',        emoji: '🏃', metrics: ['count', 'time', 'distance'], multi: true, name: 'Cardio', sub: 'Séances, temps, distance' },
+  reading:    { label: 'Lecture',       emoji: '📖', metrics: ['pages', 'time', 'count'], multi: true, name: 'Lire', sub: 'Pages, temps, lectures' },
+  meditation: { label: 'Méditation',    emoji: '🧘', metrics: ['count', 'time'], multi: true, name: 'Méditer', sub: 'Séances, temps' },
+  reduce:     { label: 'Réduire',       emoji: '📉', metrics: ['limit'], name: '', sub: 'Un maximum à ne pas dépasser' },
+  screen:     { label: "Temps d'écran", emoji: '📱', metrics: ['limit'], name: "Moins d'écran", sub: 'Relevé sur le téléphone' },
+  steps:      { label: 'Nombre de pas', emoji: '👟', metrics: ['steps'], name: 'Marcher', sub: 'Relevé sur le téléphone' },
+  revision:   { label: 'Révision',      emoji: '📚', metrics: ['count', 'time'], multi: true, name: 'Réviser', sub: 'Séances, temps' },
+  other:      { label: 'Autres',        emoji: '✨', name: '', sub: 'Tout le reste' },
+  sport:      { label: 'Sport',         emoji: '💪', metrics: ['count', 'time', 'distance'], multi: true, hidden: true },
 };
+const SPORT_CATS = new Set(['sport', 'cardio', 'muscu']);
+const metricLabel = (cat, m) => m === 'count' ? (cat === 'reading' ? 'Nombre de lectures' : 'Nombre de séances') : m === 'time' ? 'Temps' : m === 'distance' ? 'Distance' : m === 'pages' ? 'Pages' : METRIC_LABEL[m];
+const METRIC_SUB = { count: 'ex. 3 par semaine', time: 'en minutes', distance: 'en km', pages: 'pages lues' };
 const SPORT_TYPES = { any: 'Peu importe', cardio: 'Cardio', muscu: 'Musculation' };
 const SCREEN_TYPES = { total: 'Tout le téléphone', categories: 'Catégories', apps: 'Applications' };
 const APP_CATS = { social: 'Réseaux sociaux', video: 'Vidéo', game: 'Jeux', audio: 'Musique & audio', news: 'Actualités', image: 'Photos', productivity: 'Productivité', maps: 'Cartes', accessibility: 'Accessibilité', other: 'Autres' };
@@ -845,7 +905,7 @@ const REDUCE_TYPES = {
   alcohol:   { label: 'Alcool',    emoji: '🍷', unit: 'verres',     one: 'verre' },
   cigarette: { label: 'Cigarette', emoji: '🚬', unit: 'cigarettes', one: 'cigarette' },
 };
-const METRIC_LABEL = { count: 'Nombre de fois', time: 'Temps', distance: 'Distance', pages: 'Pages', quantity: 'Quantité', days: 'Chaque jour', once: 'Une fois', limit: 'Maximum' };
+const METRIC_LABEL = { count: 'Nombre de fois', time: 'Temps', distance: 'Distance', pages: 'Pages', quantity: 'Quantité', days: 'Chaque jour', once: 'Une fois', limit: 'Maximum', steps: 'Pas' };
 function metricsOf(g) {
   if (Array.isArray(g.metrics) && g.metrics.length) return g.metrics;
   if (g.type === 'quantity') return [g.cat === 'reading' ? 'pages' : 'quantity'];   // anciennes résolutions
@@ -860,10 +920,11 @@ function unitOf(g, m) {
   if (m === 'pages') return 'pages';
   if (m === 'days') return 'jours';
   if (m === 'once') return '';
-  if (m === 'limit') return g.cat === 'screen' ? 'min' : (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).unit;
+  if (m === 'steps') return 'pas';
+  if (m === 'limit') return g.cat === 'screen' ? 'min' : (g.unit || (REDUCE_TYPES[g.subtype] || {}).unit || 'fois');
   if (m === 'quantity') return g.unit || '';
   if (g.cat === 'other') return g.unit || 'fois';
-  return g.cat === 'reading' ? 'lectures' : 'séances';
+  return g.cat === 'reading' ? 'lectures' : 'séances';   // musculation, cardio, méditation, révision
 }
 // Durées lisibles : 72 min → « 1 h 12 »
 const hm = v => { v = Math.round(v); return v >= 60 ? `${Math.floor(v / 60)} h${v % 60 ? ' ' + pad(v % 60) : ''}` : `${v} min`; };
@@ -972,10 +1033,15 @@ function screenTopApps(g, a, b, n = 3) {
   for (const [d, apps] of Object.entries(state.screen || {})) if (d >= a && d < b) for (const x of apps) if (ok(x)) by[x.name || x.package] = (by[x.name || x.package] || 0) + num(x.minutes);
   return Object.entries(by).sort((x, y) => y[1] - x[1]).slice(0, n);
 }
+function stepsBetween(a, b) {
+  let t = 0;
+  for (const [d, n] of Object.entries(state.steps || {})) if (d >= a && d < b) t += num(n);
+  return t;
+}
 function evalGoal(g, key, entries) {
   const es = (entries || []).filter(e => e.goalId === g.id), t = targetsFor(g, key), lim = isLimit(g);
-  const screenEnd = g.cat === 'screen' ? periodNext(periodOf(g), key) : null;
-  const metrics = metricsOf(g).map(m => ({ m, done: g.cat === 'screen' ? screenMinutes(g, key, screenEnd) : Math.round(measure(m, es) * 10) / 10, target: t[m], unit: unitOf(g, m) }));
+  const end = periodNext(periodOf(g), key);
+  const metrics = metricsOf(g).map(m => ({ m, done: g.cat === 'screen' ? screenMinutes(g, key, end) : g.cat === 'steps' ? stepsBetween(key, end) : Math.round(measure(m, es) * 10) / 10, target: t[m], unit: unitOf(g, m) }));
   return { metrics, ok: lim ? metrics.every(x => x.done <= x.target) : metrics.every(x => x.done >= x.target) };
 }
 const doneFor = (g, entries) => evalGoal(g, periodStart(periodOf(g)), entries).metrics[0].done;
@@ -1074,7 +1140,7 @@ function computeStats() {
       if (e.book) { books.add(e.book.trim().toLowerCase()); if (e.finished) finished.add(e.book.trim().toLowerCase()); }
       else if (e.finished) finished.add('#' + e.id);
     }
-    if (e.cat === 'sport') { sessions++; km += num(e.distance); minutes += num(e.duration); if (e.activity) sports.add(e.activity.toLowerCase()); }
+    if (SPORT_CATS.has(e.cat)) { sessions++; km += num(e.distance); minutes += num(e.duration); if (e.activity) sports.add(e.activity.toLowerCase()); }
     if (e.cat === 'meditation') { medSessions++; medMinutes += num(e.duration); }
   }
   // séries hebdomadaires (onglet Profil)
@@ -1189,11 +1255,12 @@ function viewSetup() {
     <div class="lbl">1. Toi</div>
     <div class="row"><div class="field"><label>Prénom</label><input class="inp" id="su-first" autocomplete="given-name" value="${esc(setupDraft.first)}"></div>
       <div class="field"><label>Nom</label><input class="inp" id="su-last" autocomplete="family-name" value="${esc(setupDraft.last)}"></div></div>
-    <div class="lbl" style="margin-top:8px">2. Tes résolutions</div>
+    ${goals.length ? `<div class="lbl" style="margin-top:8px">2. Tes résolutions</div>
     ${list}
-    <button class="btn ghost" data-act="new-goal" style="margin-bottom:22px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Ajouter une résolution</button>
-    <button class="btn" data-act="start" ${goals.length ? '' : 'style="opacity:.45"'}>C'est parti</button>
-    <div class="hint" style="text-align:center;margin-top:12px">${goals.length ? 'Tu pourras en ajouter ou les modifier à tout moment.' : 'Ajoute au moins une résolution pour commencer.'}</div>
+    <button class="btn ghost" data-act="new-goal" style="margin-bottom:22px">${ICON_PLUS.replace('<svg', '<svg width="20" height="20" stroke="currentColor"')} Ajouter un objectif</button>
+    <button class="btn" data-act="start">C'est parti</button>
+    <div class="hint" style="text-align:center;margin-top:12px">Tu pourras en ajouter ou les modifier à tout moment.</div>`
+    : `<button class="btn" data-act="setup-next" style="margin-top:12px">Choisir ma première résolution</button>`}
     <button class="link-btn" data-act="logout" style="display:block;margin:22px auto 0">Se déconnecter</button>
   </div>`;
 }
@@ -1202,7 +1269,7 @@ function goalMeta(g, r) {
   const ms = r.metrics || [];
   if (metricsOf(g)[0] === 'once') return (r.done ? 'Fait ' : 'À faire ') + P[periodOf(g)].now;
   if (ms.length > 1) {   // plusieurs mesures : le détail est sur les barres
-    const sub = g.cat === 'sport' ? [g.subtype && g.subtype !== 'any' ? SPORT_TYPES[g.subtype] : '', (g.activities || []).slice(0, 3).join(', ')].filter(Boolean).join(' · ') : '';
+    const sub = SPORT_CATS.has(g.cat) ? (g.activities || []).slice(0, 3).join(', ') : '';
     if (g.cat === 'reading') { const b = lastBookOf(g.id); if (b) return '« ' + esc(b) + ' »'; }
     return sub ? esc(sub) : '';
   }
@@ -1252,6 +1319,12 @@ function viewResolutions() {
       extra = `<div class="screen-sub">${top.length ? top.map(([n, m]) => `${esc(n)} ${hm(m)}`).join(' · ') : 'Aucune utilisation enregistrée pour l’instant'}</div>`;
       if (!screenPlugin()) extra += `<div class="hint">Le temps d'écran se lit dans l'application Android.</div>`;
       else if (state.screenPerm === false) extra += `<button class="btn quiet" style="height:44px;margin-top:10px;font-size:14px" data-act="screen-perm">Autoriser l'accès au temps d'écran</button>`;
+    } else if (g.cat === 'steps') {
+      const td = (state.steps || {})[today];
+      extra = `<div class="screen-sub">${p === 'week' && td != null ? `Aujourd'hui : ${fmt(td)} pas` : healthPlugin() && state.stepsPerm === true ? 'Relevé automatiquement' : ''}</div>`;
+      if (!healthPlugin()) extra += `<div class="hint">Le nombre de pas se lit dans l'application sur ton téléphone.</div>`;
+      else if (state.stepsPerm === 'unavailable') extra += `<div class="hint">Installe « Health Connect » (Play Store) pour relever tes pas.</div>`;
+      else if (state.stepsPerm === false) extra += `<button class="btn quiet" style="height:44px;margin-top:10px;font-size:14px" data-act="steps-perm">Autoriser l'accès aux pas</button>`;
     } else if (!inj && !dots) {
       if (dailyOnly) btn = `<button class="add ${doneToday ? 'is-done' : ''}" data-act="toggle-day" data-id="${g.id}" data-date="${today}" aria-label="Fait aujourd'hui">${doneToday ? ICON_CHECK : ICON_PLUS}</button>`;
       else btn = `<button class="add ${done && ms[0] === 'once' ? 'is-done' : ''} ${lim ? 'neutral' : ''}" data-act="add" data-id="${g.id}" aria-label="Ajouter">${done && ms[0] === 'once' ? ICON_CHECK : ICON_PLUS}</button>`;
@@ -1283,7 +1356,8 @@ function viewResolutions() {
 function entryDesc(e, g) {
   const parts = [], ms = metricsOf(g);
   if (ms.includes('pages') || ms.includes('quantity')) parts.push(`${fmt(e.amount)} ${ms.includes('pages') ? 'pages' : g.unit || ''}`.trim());
-  if (ms.includes('limit')) parts.push(`${fmt(e.amount)} ${e.amount > 1 ? unitOf(g, 'limit') : (REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol).one}`);
+  if (ms.includes('limit')) parts.push(`${fmt(e.amount)} ${unitOf(g, 'limit')}`);
+  else if (g.cat === 'reading' && !ms.includes('pages') && num(e.amount) > 0) parts.push(`${fmt(e.amount)} pages`);
   if (e.activity) parts.push(e.activity);
   if (e.book) parts.push('« ' + e.book + ' »' + (e.finished ? ' 📕 terminé' : ''));
   else if (e.finished) parts.push('📕 livre terminé');
@@ -1341,6 +1415,7 @@ function openDaySheet(date) {
       return `<div class="wr-goal day-goal ${x.status}"><span>${ic} ${esc(x.emoji || '')} ${esc(x.name)}</span><span>${resultText(x)}</span></div>`;
     }).join('') + `</div>`;
   }
+  if ((state.steps || {})[date] != null) h += `<div class="lbl">Pas</div><div class="card" style="margin-bottom:16px"><div class="entry"><div class="e-emoji">👟</div><div class="e-main"><div class="e-title">${fmt(state.steps[date])} pas</div></div></div></div>`;
   h += `<div class="lbl">Activités</div>`;
   if (!es.length) h += `<div class="empty">Aucune activité ce jour-là.</div>`;
   else h += `<div class="card">` + es.map(e => {
@@ -1490,7 +1565,8 @@ function openSheet(html) {
 }
 function closeSheet() {
   $('#sheet').classList.remove('open'); $('#overlay').classList.remove('open');
-  unlockScroll();
+  if (!pageOpen()) unlockScroll();
+  if (donePrompts.length && !recapOpenFor) setTimeout(() => { if (!flushDonePrompts()) maybeAutoRetro(); }, 380);
   if (recapOpenFor) markRecapSeen();
 }
 
@@ -1512,7 +1588,7 @@ function allBooks() {
   return [...m.values()];
 }
 function openEntrySheet(id) {
-  const g = goalById(id); if (!g || g.cat === 'screen') return;
+  const g = goalById(id); if (!g || g.cat === 'screen' || g.cat === 'steps') return;
   if (metricsOf(g)[0] === 'once') {
     const st = periodStart(periodOf(g)), mine = entriesBetween(st, periodNext(periodOf(g), st)).filter(e => e.goalId === g.id);
     if (mine.length) { removeEntries(mine.map(e => e.id)); toast('Marqué comme pas fait'); return; }
@@ -1526,21 +1602,23 @@ function renderEntrySheet() {
   const acts = (g.activities || []).filter(Boolean);
   let h = `<div class="sh-title"><div class="emoji">${esc(g.emoji || '🎯')}</div><div class="t">${esc(g.name)}</div></div>`;
   const ms = metricsOf(g);
+  const cm = (CATS[g.cat] && CATS[g.cat].metrics) || [], opt = m => !ms.includes(m) && cm.includes(m);   // mesures non suivies : facultatives
   if (ms.includes('pages') || ms.includes('quantity')) h += `<div class="field"><label>${ms.includes('pages') ? 'Pages lues' : esc(g.unit || 'Quantité')}</label><input class="inp big" id="en-amount" type="number" inputmode="decimal" min="0" placeholder="0"></div>`;
+  else if (opt('pages')) h += `<div class="field"><label>Pages lues</label><input class="inp" id="en-amount" type="number" inputmode="numeric" min="0" placeholder="Facultatif"></div>`;
   if (ms.includes('limit')) {
-    const rt = REDUCE_TYPES[g.subtype] || REDUCE_TYPES.alcohol;
-    h += `<div class="field"><label>Nombre de ${rt.unit}</label><div class="stepper"><button data-act="en-step" data-val="-1">−</button><input class="inp" id="en-amount" type="number" inputmode="numeric" min="1" value="1"><button data-act="en-step" data-val="1">+</button></div>
-      <div class="hint">Ton maximum : ${fmt(curTargets(g).limit)} ${rt.unit} par ${P[periodOf(g)].per}.</div></div>`;
+    const u = unitOf(g, 'limit');
+    h += `<div class="field"><label>Nombre (${esc(u)})</label><div class="stepper"><button data-act="en-step" data-val="-1">−</button><input class="inp" id="en-amount" type="number" inputmode="numeric" min="1" value="1"><button data-act="en-step" data-val="1">+</button></div>
+      <div class="hint">Ton maximum : ${fmt(curTargets(g).limit)} ${esc(u)} par ${P[periodOf(g)].per}.</div></div>`;
   }
   if (g.cat === 'reading') h += `<div class="field"><label>Livre</label><input class="inp" id="en-book" list="books" placeholder="Titre du livre" value="${esc(lastBook())}"><datalist id="books">${allBooks().map(b => `<option value="${esc(b)}">`).join('')}</datalist>
     <div class="switch ${entryDraft.finished ? 'on' : ''} fin" style="margin-top:10px;cursor:pointer" role="switch" aria-checked="${!!entryDraft.finished}" data-act="en-finished"><div><div class="s-t">📕 J'ai terminé ce livre</div><div class="s-d">Compte pour le badge Bibliophile</div></div><div class="k"></div></div></div>`;
   if (acts.length) h += `<div class="field"><label>Activité</label><div class="chips">${acts.map(a => `<button class="chip ${entryDraft.activity === a ? 'on' : ''}" data-act="pick-act" data-val="${esc(a)}">${esc(a)}</button>`).join('')}</div></div>`;
   const legacySport = g.cat === 'sport' && !Array.isArray(g.metrics);   // anciennes résolutions sport : durée / distance facultatives
-  const needTime = ms.includes('time'), needDist = ms.includes('distance');
-  if (needTime || needDist || legacySport) {
+  const needTime = ms.includes('time'), needDist = ms.includes('distance'), optTime = opt('time') || legacySport, optDist = opt('distance') || (legacySport && g.distance);
+  if (needTime || needDist || optTime || optDist) {
     h += `<div class="row">`;
-    if (needTime || legacySport) h += `<div class="field"><label>Durée (min)</label><input class="inp" id="en-dur" type="number" inputmode="numeric" min="0" placeholder="${needTime ? '' : 'Facultatif'}"></div>`;
-    if (needDist || (legacySport && g.distance)) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${needDist ? '' : 'Facultatif'}"></div>`;
+    if (needTime || optTime) h += `<div class="field"><label>Durée (min)</label><input class="inp" id="en-dur" type="number" inputmode="numeric" min="0" placeholder="${needTime ? '' : 'Facultatif'}"></div>`;
+    if (needDist || optDist) h += `<div class="field"><label>Distance (km)</label><input class="inp" id="en-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${needDist ? '' : 'Facultatif'}"></div>`;
     h += `</div>`;
   }
   // jours possibles : les 7 derniers jours, sans sortir de la période en cours de l'objectif
@@ -1569,7 +1647,7 @@ function saveEntry() {
     const a = num(v['en-amount']);
     if (a <= 0) { toast(ms.includes('pages') ? 'Indique le nombre de pages' : ms.includes('limit') ? 'Indique un nombre' : 'Indique ' + (g.unit ? 'le nombre de ' + g.unit : 'une quantité')); return; }
     e.amount = a;
-  } else e.amount = g.cat === 'reading' ? 0 : 1;
+  } else e.amount = g.cat === 'reading' ? Math.max(0, num(v['en-amount'])) : 1;   // lecture : pages facultatives
   if (ms.includes('time') && !(num(v['en-dur']) > 0)) { toast('Indique la durée (en minutes)'); return; }
   if (ms.includes('distance') && !(num(v['en-dist']) > 0)) { toast('Indique la distance (en km)'); return; }
   if (v['en-book'] && v['en-book'].trim()) e.book = v['en-book'].trim().slice(0, 120);
@@ -1589,6 +1667,7 @@ function saveEntry() {
   const ga = after.goals.find(x => x.id === g.id) || { metrics: [{ done: 0, target: 0 }] };
   if (isLimit(g)) {
     const x = ga.metrics[0], left = x.target - x.done;
+    if (before && before.status === 'ok' && ga.status === 'ko' && !marked(g, 'lost', st)) { setMarks([[g, 'lost', st]]); publishLost(g, st, evalGoal(g, st, entriesBetween(st, nx))); }
     toast(left < 0 ? `⚠️ Limite dépassée (${fmt(x.done)} / ${fmt(x.target)})` : left === 0 ? 'Limite atteinte : on s\'arrête là 💪' : `Noté. Il t'en reste ${fmt(left)} au maximum`);
   }
   else if (after.validated && before && before.status !== 'ok') toast('🔥 ' + P[p].validated + ' !');
@@ -1635,21 +1714,22 @@ const EMOJIS = ['📖', '🏃', '🏊', '🏋️', '🚴', '🧘', '🍷', '🚬
 // Objectifs proposés par défaut selon la mesure et la période
 function defaultTarget(m, p) {
   const T = {
-    count: { day: 1, week: 3, month: 12, year: 100 }, time: { day: 20, week: 120, month: 500, year: 5000 },
+    count: { day: 1, week: 3, month: 12, year: 100 }, time: { day: 20, week: 120, month: 500, year: 5000 }, steps: { day: 10000, week: 70000 },
     distance: { day: 5, week: 20, month: 80, year: 1000 }, pages: { day: 20, week: 100, month: 400, year: 5000 },
     limit: { day: 2, week: 7, month: 20, year: 200 }, quantity: { day: 1, week: 7, month: 30, year: 365 },
     days: { day: 1, week: 5, month: 20, year: 1 }, once: { day: 1, week: 1, month: 1, year: 1 },
   };
   return (T[m] || T.count)[p] || 1;
 }
-const CAT_DEFAULT_METRICS = { reading: ['pages'], sport: ['count'], meditation: ['time'], reduce: ['limit'], screen: ['limit'] };
+const CAT_DEFAULT_METRICS = { reading: ['pages'], sport: ['count'], muscu: ['count'], cardio: ['count'], meditation: ['time'], revision: ['time'], reduce: ['limit'], screen: ['limit'], steps: ['steps'] };
 let newSportOpen = false;
 function openGoalEditor(id) {
   archiveConfirm = false; newSportOpen = false;
   if (id) {
     const g = goalById(id), ms = metricsOf(g);
-    goalDraft = Object.assign(clone(g), { _new: false, period: periodOf(g), metrics: ms.slice(), targets: Object.assign({}, curTargets(g)),
-      type: g.type || 'count', subtype: g.subtype || (g.cat === 'sport' ? 'any' : g.cat === 'reduce' ? 'alcohol' : null), activities: (g.activities || []).slice() });
+    goalDraft = Object.assign(clone(g), { _new: false, _key: 'edit-' + g.id, period: periodOf(g), metrics: ms.slice(), targets: Object.assign({}, curTargets(g)),
+      type: g.cat === 'other' ? ({ count: 'count', time: 'time', quantity: 'quantity', days: 'daily', once: 'once' }[ms[0]] || g.type || 'count') : (g.type || 'count'),
+      unit: g.cat === 'reduce' ? unitOf(g, 'limit') : g.unit, subtype: g.subtype || null, activities: (g.activities || []).slice() });
   } else {
     goalDraft = { _new: true, period: period || 'week', shared: true, name: '', emoji: '🎯', cat: 'other', type: 'count', unit: 'fois', subtype: null,
       metrics: ['count'], targets: {}, activities: [] };
@@ -1673,66 +1753,46 @@ function readGoalForm() {
 }
 // mesures effectives du brouillon (catégorie Autre : déduites du type)
 function draftMetrics(d) {
-  if (d.cat === 'other') return [{ count: 'count', quantity: 'quantity', daily: 'days', once: 'once' }[d.type] || 'count'];
+  if (d.cat === 'other') return [{ count: 'count', time: 'time', quantity: 'quantity', daily: 'days', once: 'once' }[d.type] || 'count'];
+  if (d.cat === 'steps') return ['steps'];
   return d.metrics;
 }
 function sportsFor(sub) {
   const all = state.sports || [];
-  return sub === 'cardio' || sub === 'muscu' ? all.filter(x => x.kind === sub) : all;
+  return sub === 'cardio' || sub === 'muscu' ? all.filter(x => x.kind === sub || x.mine) : all;
 }
 function renderGoalEditor() {
+  if (!goalDraft) return;
+  if (goalDraft._wiz != null) return renderWizard();
   const d = goalDraft, per = P[d.period].per;
-  let h = `<div class="sh-title"><div class="t">${d._new ? 'Nouvelle résolution' : 'Modifier la résolution'}</div></div>`;
+  let h = '';
   // 1. période
   h += d._new
     ? `<div class="field"><label>Période</label><div class="seg">${PERIODS.map(p => `<button class="${d.period === p ? 'on' : ''}" data-act="seg" data-field="period" data-val="${p}">${P[p].tab}</button>`).join('')}</div>
        <div class="hint">${{ day: 'À tenir chaque jour, remis à zéro à minuit.', week: 'À tenir sur la semaine, remis à zéro le lundi.', month: 'À tenir sur le mois, remis à zéro le 1er.', year: "À tenir sur l'année, remis à zéro le 1er janvier." }[d.period]}</div></div>`
-    : `<div class="field"><label>Période et catégorie</label><div class="hint" style="margin:0">${P[d.period].tab} · ${CATS[d.cat] ? CATS[d.cat].label : 'Autre'} (elles ne se changent pas après la création)</div></div>`;
+    : `<div class="field"><label>Période et catégorie</label><div class="hint" style="margin:0">${P[d.period].tab} · ${CATS[d.cat] ? CATS[d.cat].label : 'Autres'} (elles ne se changent pas après la création)</div></div>`;
   // 2. catégorie
   if (d._new) h += `<div class="field"><label>Catégorie</label><div class="chips">${Object.entries(CATS).filter(([k]) => k !== 'screen' || screenPlugin()).map(([k, c]) =>
     `<button class="chip ${d.cat === k ? 'on' : ''}" data-act="ge-cat" data-val="${k}">${c.emoji} ${c.label}</button>`).join('')}</div>
     ${screenPlugin() ? '' : `<div class="hint">📱 Le temps d'écran se crée depuis l'application Android (l'iPhone et le navigateur n'y donnent pas accès).</div>`}</div>`;
   // 3. nom
-  const ph = { reading: 'ex. Lire', sport: 'ex. Courir', meditation: 'ex. Méditer', reduce: d.subtype === 'cigarette' ? 'ex. Moins fumer' : "ex. Moins d'alcool", other: "ex. Boire de l'eau" }[d.cat] || '';
+  const ph = { reduce: "ex. Moins d'alcool", other: "ex. Boire de l'eau" }[d.cat] || '';
   h += `<div class="field"><label>Nom</label><div class="row" style="gap:8px"><input class="inp" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:22px;padding:0" maxlength="4"><input class="inp" id="ge-name" value="${esc(d.name)}" placeholder="${esc(ph)}" maxlength="40"></div>
     <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div></div>`;
   // 4. options propres à la catégorie
-  if (d.cat === 'sport') {
-    h += `<div class="field"><label>Type de sport</label><div class="seg three">${Object.entries(SPORT_TYPES).map(([k, l]) =>
-      `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${l}</button>`).join('')}</div></div>`;
-    const list = sportsFor(d.subtype), names = new Set(list.map(x => x.name));
-    const extra = d.activities.filter(a => !names.has(a)).map(a => ({ name: a, mine: true }));
-    h += `<div class="field"><label>Sports proposés à la saisie</label><div class="chips multi small">${[...extra, ...list].map(x =>
-      `<button class="chip ${d.activities.includes(x.name) ? 'on' : ''} ${x.mine ? 'mine' : ''}" data-act="ge-sport" data-val="${esc(x.name)}">${esc(x.name)}</button>`).join('')}
-      <button class="chip" data-act="ge-new-sport">＋ Autre sport</button></div>
-      ${newSportOpen ? `<div class="row" style="margin-top:10px;gap:8px"><input class="inp" id="ge-newsport" placeholder="Nom du sport" maxlength="60" value="${esc(d.newSport || '')}"><button class="btn quiet" style="flex:0 0 110px;height:50px" data-act="ge-add-sport">Ajouter</button></div>
-      <div class="hint">Ce sport sera ajouté à ta liste personnelle (visible par toi seul).</div>` : `<div class="hint">Touche les sports que tu pratiques (facultatif). Tu les choisiras à chaque séance.</div>`}</div>`;
-  }
+  if (d.cat === 'cardio') h += `<div class="field"><label>Sports proposés à la saisie</label>${sportsPicker(d)}</div>`;
   if (d.cat === 'screen') {
     h += `<div class="field"><label>Quoi ?</label><div class="seg three">${Object.entries(SCREEN_TYPES).map(([k, l]) =>
       `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${l}</button>`).join('')}</div></div>`;
-    if (d.subtype === 'categories') {
-      h += `<div class="field"><label>Catégories d'applications</label><div class="chips multi small">${Object.entries(APP_CATS).map(([k, l]) =>
-        `<button class="chip ${d.activities.includes(k) ? 'on' : ''}" data-act="ge-pick" data-val="${k}">${l}</button>`).join('')}</div>
-        <div class="hint">Catégories déclarées par les applications elles-mêmes : certaines n'en ont pas et sont dans « Autres ».</div></div>`;
-    }
-    if (d.subtype === 'apps') {
-      const apps = knownApps();
-      h += `<div class="field"><label>Applications</label>` + (apps.length
-        ? `<div class="chips multi small">${apps.map(a => `<button class="chip ${d.activities.includes(a.package) ? 'on' : ''}" data-act="ge-pick" data-val="${esc(a.package)}">${esc(a.name)}</button>`).join('')}</div><div class="hint">Classées de la plus utilisée à la moins utilisée (30 derniers jours).</div>`
-        : screenPlugin() ? `<div class="hint" style="margin-bottom:10px">Aucune donnée pour l'instant.</div><button class="btn quiet" data-act="screen-sync">Lire mon temps d'écran</button>`
-        : `<div class="hint">La liste de tes applications s'affiche dans l'application Android.</div>`) + `</div>`;
-    }
+    if (d.subtype !== 'total') h += `<div class="field"><label>${d.subtype === 'apps' ? 'Applications' : "Catégories d'applications"}</label>${screenPickHtml(d)}</div>`;
   }
-  if (d.cat === 'reduce') {
-    h += `<div class="field"><label>Quoi ?</label><div class="seg">${Object.entries(REDUCE_TYPES).map(([k, r]) =>
-      `<button class="${d.subtype === k ? 'on' : ''}" data-act="ge-sub" data-val="${k}">${r.emoji} ${r.label}</button>`).join('')}</div></div>`;
-  }
+  if (d.cat === 'reduce') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="verres, cigarettes, cafés, €…" maxlength="20"></div>`;
+  if (d.cat === 'steps') h += `<div class="field"><label>Relevé des pas</label>${stepsHelp()}</div>`;
   // 5. ce qui est mesuré
   if (d.cat === 'other') {
     h += `<div class="field"><label>Type</label><div class="seg">${Object.entries(TYPE_INFO).filter(([k]) => k !== 'daily' || dailyMax(d.period)).map(([k, t]) =>
       `<button class="${d.type === k ? 'on' : ''}" data-act="seg" data-field="type" data-val="${k}">${t.label}<small>${t.sub}</small></button>`).join('')}</div></div>`;
-  } else if (CATS[d.cat].metrics.length > 1) {
+  } else if ((CATS[d.cat].metrics || []).length > 1) {
     const c = CATS[d.cat];
     h += `<div class="field"><label>Ce que tu suis${c.multi ? ' (un ou plusieurs)' : ''}</label><div class="${c.multi ? 'chips multi' : 'seg'}">${c.metrics.map(m =>
       `<button class="${c.multi ? 'chip ' : ''}${d.metrics.includes(m) ? 'on' : ''}" data-act="ge-metric" data-val="${m}">${METRIC_LABEL[m]}</button>`).join('')}</div></div>`;
@@ -1740,18 +1800,18 @@ function renderGoalEditor() {
   // 6. objectifs chiffrés
   const ms = draftMetrics(d).filter(m => m !== 'once');
   if (ms.length) {
-    const unitFor = m => d.cat === 'screen' ? 'minutes' : d.cat === 'other' ? (m === 'days' ? 'jours' : d.unit || '…') : m === 'limit' ? (REDUCE_TYPES[d.subtype] || REDUCE_TYPES.alcohol).unit : unitOf({ cat: d.cat, subtype: d.subtype }, m);
+    const unitFor = m => d.cat === 'screen' ? 'minutes' : d.cat === 'other' ? (m === 'days' ? 'jours' : m === 'time' ? 'minutes' : d.unit || '…') : m === 'limit' ? (d.unit || 'fois') : m === 'time' ? 'minutes' : m === 'distance' ? 'km' : unitOf({ cat: d.cat, unit: d.unit }, m);
     h += `<div class="field"><label>${d.cat === 'reduce' || d.cat === 'screen' ? 'Maximum par ' + per : 'Objectif par ' + per}</label>` + ms.map(m =>
       `<div class="trow"><div class="tl">${esc(unitFor(m))}</div><div class="stepper"><button data-act="step" data-m="${m}" data-val="-1">−</button><input class="inp" id="ge-t-${m}" type="number" inputmode="decimal" min="${m === 'limit' ? 0 : 1}" ${m === 'days' ? `max="${dailyMax(d.period)}"` : ''} value="${draftTarget(m)}"><button data-act="step" data-m="${m}" data-val="1">+</button></div></div>`).join('') +
       (d.cat === 'reduce' ? `<div class="hint">Résolution tenue tant que tu ne dépasses pas ce nombre. Mets 0 pour arrêter complètement.</div>` : '') +
       (d.cat === 'screen' ? `<div class="hint" id="ge-screen-hint">Soit ${hm(draftTarget('limit'))} maximum. Le temps est relevé automatiquement sur ton téléphone.</div>` : '') + `</div>`;
-    if (d.cat === 'other' && d.type !== 'daily') h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
+    if (d.cat === 'other' && ['count', 'quantity'].includes(d.type)) h += `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
   }
-  // 7. partage dans la rétrospective des amis
-  if (d.period !== 'day') {
+  // 7. partage : rétrospective de la semaine, et « Perdu » dans le fil pour Réduire / Temps d'écran
+  if (d.period !== 'day' || d.cat === 'reduce' || d.cat === 'screen') {
     h += `<div class="field"><label>Partage</label><div class="seg">
       <button class="${d.shared !== false ? 'on' : ''}" data-act="ge-share" data-val="1">🌍 Public</button><button class="${d.shared === false ? 'on' : ''}" data-act="ge-share" data-val="0">🔒 Privé</button></div>
-      <div class="hint">${d.shared !== false ? 'Tes amis voient cette résolution dans leur rétrospective de fin de ' + per + ' (réussie ou non).' : "Elle n'apparaît jamais chez tes amis."}</div></div>`;
+      <div class="hint">${d.shared !== false ? 'Tes amis la voient ' + [d.period === 'week' ? 'dans la rétrospective de la semaine (réussie ou non)' : '', d.cat === 'reduce' || d.cat === 'screen' ? 'et quand tu la perds' : ''].filter(Boolean).join(' ') + '.' : "Elle n'apparaît jamais chez tes amis."}</div></div>`;
   }
   // 8. blessure / archivage
   if (!d._new) {
@@ -1760,14 +1820,15 @@ function renderGoalEditor() {
   }
   h += `<button class="btn" data-act="save-goal">${d._new ? 'Ajouter' : 'Enregistrer'}</button>`;
   if (!d._new) h += `<button class="btn danger ${archiveConfirm ? 'confirm' : ''}" data-act="archive-goal" style="margin-top:8px">${archiveConfirm ? 'Confirmer l\'archivage' : 'Archiver la résolution'}</button>`;
-  const y = $('#sheet').scrollTop;
-  openSheet(h); $('#sheet').scrollTop = y;
+  openPage(`<div class="wz edit"><div class="wz-top"><button class="wz-nav" data-act="wz-close" aria-label="Fermer">✕</button><div class="wz-title">Modifier la résolution</div><span class="wz-nav"></span></div>
+    <div class="wz-body">${h}</div></div>`);
 }
 const dailyMax = p => p === 'week' ? 7 : p === 'month' ? 31 : 0;   // « chaque jour » : x jours par semaine / par mois
 function saveGoal() {
   readGoalForm();
   const d = goalDraft, cur = periodStart(d.period);
   if (!d.name.trim()) { toast('Donne un nom à ta résolution'); return; }
+  if (d.cat === 'reduce' && !(d.unit || '').trim()) { toast('Indique ce que tu comptes (verres, cigarettes…)'); return; }
   if (d.cat === 'other' && d.type === 'daily' && !dailyMax(d.period)) d.type = 'count';
   const ms = draftMetrics(d);
   if (!ms.length) { toast('Choisis au moins une chose à suivre'); return; }
@@ -1783,9 +1844,9 @@ function saveGoal() {
   const type = ms[0] === 'once' ? 'once' : ms[0] === 'days' ? 'daily' : ['pages', 'quantity', 'limit'].includes(ms[0]) ? 'quantity' : 'count';
   const fields = {
     name: d.name.trim(), emoji: (d.emoji || '🎯').trim() || '🎯', cat: d.cat, type, metrics: ms,
-    subtype: ['sport', 'reduce', 'screen'].includes(d.cat) ? d.subtype : null, isLimit: d.cat === 'reduce' || d.cat === 'screen',
-    unit: d.cat === 'other' ? (ms[0] === 'days' ? 'jours' : ms[0] === 'once' ? '' : (d.unit || '').trim()) : unitOf({ cat: d.cat, subtype: d.subtype, unit: '' }, ms[0]),
-    activities: d.cat === 'sport' || (d.cat === 'screen' && d.subtype !== 'total') ? d.activities : [], distance: ms.includes('distance'),
+    subtype: d.cat === 'screen' ? d.subtype : d.cat === 'reduce' ? (d.subtype || null) : null, isLimit: d.cat === 'reduce' || d.cat === 'screen',
+    unit: d.cat === 'other' ? (ms[0] === 'days' ? 'jours' : ms[0] === 'once' ? '' : ms[0] === 'time' ? 'min' : (d.unit || '').trim()) : d.cat === 'reduce' ? (d.unit || '').trim().slice(0, 20) : unitOf({ cat: d.cat, unit: '' }, ms[0]),
+    activities: d.cat === 'cardio' || (d.cat === 'screen' && d.subtype !== 'total') ? d.activities : [], distance: ms.includes('distance'),
     shared: d.shared !== false,
   };
   const items = clone(goalsList());
@@ -1802,8 +1863,9 @@ function saveGoal() {
       g.targetHistory.sort((a, b) => a.from < b.from ? -1 : 1);
     }
   }
-  closeSheet(); saveGoals(items); toast(d._new ? 'Résolution ajoutée' : 'Résolution mise à jour');
+  closePage(); saveGoals(items); toast(d._new ? 'Résolution ajoutée 🎯' : 'Résolution mise à jour');
   if (d.cat === 'screen') syncScreenTime(true).then(render);
+  if (d.cat === 'steps') syncSteps().then(() => { checkSyncedGoals(); render(); });
 }
 // applications vues dans le temps d'écran des 30 derniers jours, des plus utilisées aux moins utilisées
 function knownApps() {
@@ -1823,7 +1885,7 @@ async function addUserSport() {
   if (found) {
     if (!d.activities.includes(found.name)) d.activities.push(found.name);
   } else {
-    const kind = d.subtype === 'cardio' || d.subtype === 'muscu' ? d.subtype : 'autre';
+    const kind = d.cat === 'cardio' ? 'cardio' : 'autre';
     try { await backend.addUserSport(name, kind); }
     catch (e) { toast('Ajout impossible : ' + errText(e)); return; }
     state.sports = [...(state.sports || []), { name, kind, mine: true }].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
@@ -1849,7 +1911,7 @@ function archiveGoal() {
   if (!archiveConfirm) { archiveConfirm = true; readGoalForm(); renderGoalEditor(); return; }
   const items = clone(goalsList()), g = items.find(x => x.id === goalDraft.id);
   g.archivedWeek = periodStart(periodOf(g));
-  closeSheet(); saveGoals(items); toast('Objectif archivé');
+  closePage(); saveGoals(items); toast('Objectif archivé');
 }
 
 /* ---- profile ---- */
@@ -1979,7 +2041,7 @@ function markRecapSeen() {
   pr.recaps = Object.assign({}, pr.recaps || {}, { [p]: k });
   saveProfile(pr);
   if (recapQueue.length) setTimeout(() => { if (!sheetOpen()) openRecap(recapQueue.shift()); }, 380);
-  else setTimeout(() => maybeAutoRetro(), 400);   // après les bilans perso : la rétrospective des amis
+  else setTimeout(() => { if (!flushDonePrompts()) maybeAutoRetro(); }, 400);   // après les bilans perso : pas atteints, puis la rétrospective des amis
 }
 
 /* ============ amis : fil d'activité, demandes, profils d'amis ============
@@ -2361,6 +2423,257 @@ function closeRetro() {
   retroState = null;
 }
 
+
+/* ============ nombre de pas (Health Connect / Apple Santé) ============ */
+const healthPlugin = () => window.__HEALTH_TEST__ || (IS_APP ? plugin('Health') : null);
+const hasStepsGoals = () => goalsList().some(g => g.cat === 'steps' && !isArchived(g));
+// ask : ouvre la demande d'autorisation (bouton). Sinon, lecture silencieuse si déjà autorisé.
+async function syncSteps(ask) {
+  const H = healthPlugin();
+  if (!H || !state.user || (!ask && !hasStepsGoals())) return;
+  try {
+    const av = await H.isAvailable();
+    if (!av || !av.available) { state.stepsPerm = 'unavailable'; return; }
+    const opts = { read: ['steps'] };
+    // iPhone : Santé ne dit jamais si la lecture est autorisée ; la demande ne s'affiche qu'une fois
+    const st = ask || IS_IOS_APP ? await H.requestAuthorization(opts) : await H.checkAuthorization(opts);
+    if (!IS_IOS_APP && !(st && (st.readAuthorized || []).includes('steps'))) { state.stepsPerm = false; return; }
+    state.stepsPerm = true;
+    const from = addDays(todayKey(), -13);
+    const res = await H.queryAggregated({ dataType: 'steps', startDate: pkey(from).toISOString(), endDate: new Date().toISOString(), bucket: 'day', aggregation: 'sum' });
+    const rows = [];
+    state.steps = state.steps || {};
+    for (const x of (res && res.samples) || []) {
+      const d = dkey(new Date(x.startDate)), n = Math.max(0, Math.round(num(x.value)));
+      if (d < from || d > todayKey()) continue;
+      if (state.steps[d] !== n) { state.steps[d] = n; rows.push({ date: d, steps: n }); }
+    }
+    if (rows.length) await backend.upsertSteps(uid(), rows);
+  } catch (e) { console.warn('pas', e); }
+}
+
+/* ---- mémo des popups déjà montrées (profiles.goal_marks) ---- */
+const marked = (g, kind, key) => (((state.profile && state.profile.goalMarks) || {})[g.id] || {})[kind] === key;
+function setMarks(list) {   // list : [[g, kind, key], ...]
+  if (!list.length) return;
+  const p = clone(state.profile); p.goalMarks = Object.assign({}, p.goalMarks);
+  for (const [g, kind, key] of list) p.goalMarks[g.id] = Object.assign({}, p.goalMarks[g.id], { [kind]: key });
+  saveProfile(p);
+}
+// Après une synchro : pas atteints → popup « Résolution tenue ! » ; temps d'écran dépassé → « Perdu » dans le fil
+let donePrompts = [];
+function checkSyncedGoals() {
+  if (state.phase !== 'app' || !state.profile) return;
+  const marks = [];
+  for (const g of goalsList()) {
+    if (isArchived(g) || (g.cat !== 'steps' && g.cat !== 'screen')) continue;
+    const p = periodOf(g), cur = periodStart(p);
+    for (const key of [periodPrev(p, cur), cur]) {
+      if (!isActive(g, key) || isInjured(g, key)) continue;
+      const ev = evalGoal(g, key, []);
+      if (g.cat === 'steps' && ev.ok && !marked(g, 'done', key)) {
+        marks.push([g, 'done', key]);
+        donePrompts.push({ goalId: g.id, date: key === cur ? todayKey() : addDays(periodNext(p, key), -1) });
+      }
+      if (g.cat === 'screen' && !ev.ok && !marked(g, 'lost', key)) { marks.push([g, 'lost', key]); publishLost(g, key, ev); }
+    }
+  }
+  setMarks(marks);
+}
+function flushDonePrompts() {
+  if (!donePrompts.length || sheetOpen() || recapOpenFor || retroOpen() || pageOpen()) return false;
+  const x = donePrompts.shift(), g = goalById(x.goalId);
+  if (!g) return flushDonePrompts();
+  openDoneSheet(g, { id: null, date: x.date });
+  return true;
+}
+// Réduire / Temps d'écran dépassé : publié dans le fil si la résolution est publique
+function publishLost(g, key, ev) {
+  if (g.shared === false) return;
+  const p = periodOf(g), when = p === 'day' ? (key === todayKey() ? "aujourd'hui" : 'le ' + DAYS_FULL[pkey(key).getDay()] + ' ' + pkey(key).getDate() + ' ' + MONTHS[pkey(key).getMonth()])
+    : key === periodStart('week') ? 'cette semaine' : 'la semaine du ' + weekLabel(key, true);
+  const body = `❌ Perdu ${when} : ${g.name} (${resultPlain(ev)})`, u = uid();
+  write(async () => {
+    const row = await backend.createPost({ user_id: u, entry_id: null, goal_name: g.name, goal_emoji: g.emoji || '🎯', cat: g.cat || 'other', body: body.slice(0, 300), note: null, photo_url: null });
+    if (social.loaded && row) { social.posts.unshift(row); if (tab === 'amis') render(); }
+  });
+}
+
+/* ============ page plein écran (assistant de création, modification) ============ */
+const pageOpen = () => $('#page').classList.contains('open');
+function openPage(html) {
+  const pg = $('#page'), same = pg.classList.contains('open') && pg.dataset.key === (goalDraft && goalDraft._key);
+  const y = same ? pg.scrollTop : 0;
+  pg.innerHTML = html; pg.dataset.key = (goalDraft && goalDraft._key) || '';
+  pg.classList.add('open'); pg.scrollTop = y; lockScroll();
+}
+function closePage() {
+  $('#page').classList.remove('open'); goalDraft = null; newSportOpen = false;
+  if (!sheetOpen()) unlockScroll();
+  render();
+}
+
+/* ---- assistant : une question par écran ---- */
+function openWizard() {
+  archiveConfirm = false; newSportOpen = false;
+  goalDraft = { _new: true, _wiz: 0, _key: 'wiz-0', period: 'week', shared: true, name: '', emoji: '🎯', cat: null, type: 'count', unit: 'fois', subtype: null, metrics: [], targets: {}, activities: [] };
+  renderGoalEditor();
+}
+function wizSteps(d) {
+  const s = ['period', 'cat', 'name'];
+  if (['muscu', 'cardio', 'reading', 'meditation', 'revision'].includes(d.cat)) s.push('metrics', 'targets');
+  if (d.cat === 'cardio') s.push('sports');
+  if (d.cat === 'reduce') s.push('reduce');
+  if (d.cat === 'screen') { s.push('scope'); if (d.subtype && d.subtype !== 'total') s.push('pick'); s.push('targets'); }
+  if (d.cat === 'steps') s.push('targets', 'health');
+  if (d.cat === 'other') { s.push('type'); if (d.type !== 'once') s.push('targets'); }
+  if (d.period === 'week' || d.cat === 'reduce' || d.cat === 'screen') s.push('share');   // jour : le partage ne sert qu'aux « Perdu »
+  s.push('summary');
+  return s;
+}
+function setDraftCat(d, c) {
+  const prev = d.cat; d.cat = c;
+  if (prev === c) return;
+  d.targets = {}; d.activities = [];
+  d.metrics = (CAT_DEFAULT_METRICS[c] || ['count']).slice();
+  d.subtype = c === 'screen' ? null : null;
+  d.shared = !(c === 'reduce' || c === 'screen');   // Réduire et Temps d'écran : privés par défaut
+  if (c === 'other') { d.type = 'count'; d.unit = 'fois'; }
+  if (c === 'reduce') d.unit = '';
+  const defNames = Object.values(CATS).map(x => x.name).filter(Boolean);
+  if (!d.name || defNames.includes(d.name)) d.name = CATS[c].name || '';
+  if (!d.emoji || d.emoji === '🎯' || Object.values(CATS).some(x => x.emoji === d.emoji)) d.emoji = c === 'other' ? '🎯' : CATS[c].emoji;
+}
+function wizCard(act, val, on, title, sub, icon, disabled) {
+  return `<button class="wz-card ${on ? 'on' : ''}" ${disabled ? 'disabled' : `data-act="${act}" data-val="${esc(val)}"`}>${icon ? `<span class="wz-ic">${icon}</span>` : ''}<span class="wz-ct"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`;
+}
+function targetRows(d) {
+  const per = P[d.period].per;
+  const unitFor = m => d.cat === 'screen' ? 'minutes' : d.cat === 'other' ? (m === 'days' ? 'jours' : m === 'time' ? 'minutes' : d.unit || '…') : m === 'limit' ? (d.unit || 'fois') : m === 'time' ? 'minutes' : m === 'distance' ? 'km' : unitOf({ cat: d.cat, unit: d.unit }, m);
+  return draftMetrics(d).filter(m => m !== 'once').map(m =>
+    `<div class="trow"><div class="tl">${esc(unitFor(m))}<small> par ${per}</small></div><div class="stepper"><button data-act="step" data-m="${m}" data-val="-1">−</button><input class="inp" id="ge-t-${m}" type="number" inputmode="decimal" min="${m === 'limit' ? 0 : 1}" ${m === 'days' ? `max="${dailyMax(d.period)}"` : ''} value="${draftTarget(m)}"><button data-act="step" data-m="${m}" data-val="1">+</button></div></div>`).join('');
+}
+function sportsPicker(d) {
+  const list = sportsFor('cardio'), names = new Set(list.map(x => x.name));
+  const extra = d.activities.filter(a => !names.has(a)).map(a => ({ name: a, mine: true }));
+  return `<div class="chips multi small">${[...extra, ...list].map(x =>
+    `<button class="chip ${d.activities.includes(x.name) ? 'on' : ''} ${x.mine ? 'mine' : ''}" data-act="ge-sport" data-val="${esc(x.name)}">${esc(x.name)}</button>`).join('')}
+    <button class="chip" data-act="ge-new-sport">＋ Autre sport</button></div>
+    ${newSportOpen ? `<div class="row" style="margin-top:10px;gap:8px"><input class="inp" id="ge-newsport" placeholder="Nom du sport" maxlength="60" value="${esc(d.newSport || '')}"><button class="btn quiet" style="flex:0 0 110px;height:50px" data-act="ge-add-sport">Ajouter</button></div>
+    <div class="hint">Ce sport sera ajouté à ta liste personnelle (visible par toi seul).</div>` : ''}`;
+}
+function screenPickHtml(d) {
+  if (d.subtype === 'categories') return `<div class="chips multi small">${Object.entries(APP_CATS).map(([k, l]) =>
+    `<button class="chip ${d.activities.includes(k) ? 'on' : ''}" data-act="ge-pick" data-val="${k}">${l}</button>`).join('')}</div>
+    <div class="hint">Catégories déclarées par les applications elles-mêmes : certaines n'en ont pas et sont dans « Autres ».</div>`;
+  const apps = knownApps();
+  return apps.length
+    ? `<div class="chips multi small">${apps.map(a => `<button class="chip ${d.activities.includes(a.package) ? 'on' : ''}" data-act="ge-pick" data-val="${esc(a.package)}">${esc(a.name)}</button>`).join('')}</div><div class="hint">Classées de la plus utilisée à la moins utilisée (30 derniers jours).</div>`
+    : screenPlugin() ? `<div class="hint" style="margin-bottom:10px">Aucune donnée pour l'instant.</div><button class="btn quiet" data-act="screen-sync">Lire mon temps d'écran</button>`
+    : `<div class="hint">La liste de tes applications s'affiche dans l'application Android.</div>`;
+}
+function stepsHelp() {
+  if (!healthPlugin()) return `<div class="hint">Le nombre de pas se relève dans l'application sur ton téléphone (Android ou iPhone).</div>`;
+  const st = state.stepsPerm;
+  const howto = IS_IOS_APP ? "Resolio lit tes pas dans l'app <b>Santé</b> de l'iPhone."
+    : "Resolio lit tes pas dans <b>Health Connect</b>. Sur Samsung : Samsung Health → Paramètres → Health Connect → autorise le partage des pas.";
+  return `<div class="card wz-info">${howto}</div>` + (st === true ? `<div class="tag ok" style="margin-top:14px">✓ Accès aux pas autorisé${state.steps && state.steps[todayKey()] != null ? ` · ${fmt(state.steps[todayKey()])} pas aujourd'hui` : ''}</div>`
+    : st === 'unavailable' ? `<div class="hint" style="margin-top:12px">Health Connect n'est pas disponible : installe « Health Connect » depuis le Play Store, puis réessaie.</div><button class="btn quiet" style="margin-top:10px" data-act="wz-health">Réessayer</button>`
+    : `<button class="btn" style="margin-top:14px" data-act="wz-health">${st === false ? "Réessayer l'autorisation" : 'Autoriser l’accès aux pas'}</button>`);
+}
+function wizSummary(d) {
+  const ms = draftMetrics(d), per = P[d.period].per;
+  const t = m => m === 'once' ? 'une fois' : (d.cat === 'screen' || m === 'time') ? hm(draftTarget(m)) : `${fmt(draftTarget(m))} ${m === 'limit' ? (d.unit || 'fois') : m === 'days' ? 'jours' : d.cat === 'other' ? (d.unit || '') : unitOf({ cat: d.cat, unit: d.unit }, m)}`;
+  const goal = (d.cat === 'reduce' || d.cat === 'screen' ? 'Maximum ' : '') + ms.map(t).join(' · ') + (ms[0] === 'once' ? ` par ${per}` : ` par ${per}`);
+  const rows = [['Période', d.period === 'day' ? 'Chaque jour' : 'Chaque semaine'], ['Catégorie', CATS[d.cat].label], ['Objectif', goal]];
+  if (d.cat === 'cardio' && d.activities.length) rows.push(['Sports', d.activities.join(', ')]);
+  if (d.cat === 'screen') rows.push(['Quoi', d.subtype === 'total' ? 'Tout le téléphone' : d.activities.map(a => APP_CATS[a] || (knownApps().find(x => x.package === a) || {}).name || a).join(', ')]);
+  if (wizSteps(d).includes('share')) rows.push(['Partage', d.shared !== false ? '🌍 Public' : '🔒 Privé']);
+  const opt = (CATS[d.cat].metrics || []).filter(m => !ms.includes(m));
+  return `<div class="wz-sum"><div class="wz-sum-h"><span>${esc(d.emoji || '🎯')}</span><b>${esc(d.name)}</b></div>` +
+    rows.map(([k, v]) => `<div class="wz-sum-r"><span>${k}</span><span>${esc(v)}</span></div>`).join('') + `</div>` +
+    (opt.length ? `<div class="hint" style="margin-top:12px">À chaque ${d.cat === 'reading' ? 'lecture' : 'séance'}, tu pourras aussi noter ${opt.map(m => metricLabel(d.cat, m).toLowerCase()).join(' et ')} (facultatif).</div>` : '');
+}
+function renderWizard() {
+  const d = goalDraft, steps = wizSteps(d);
+  d._wiz = Math.max(0, Math.min(d._wiz, steps.length - 1));
+  const id = steps[d._wiz]; d._key = 'wiz-' + d._wiz;
+  let q = '', sub = '', body = '', cta = 'Continuer', foot = true;
+  const per = P[d.period].per;
+  if (id === 'period') {
+    q = 'Tu veux tenir cet objectif…'; foot = false;
+    body = `<div class="wz-cards">` + wizCard('wz-period', 'day', d.period === 'day', 'Chaque jour', 'Remis à zéro chaque soir à minuit', '☀️') + wizCard('wz-period', 'week', d.period === 'week' && d._picked, 'Chaque semaine', 'Remis à zéro le lundi', '🗓️') + `</div>`;
+  } else if (id === 'cat') {
+    q = 'Quel objectif ?'; foot = false;
+    body = `<div class="wz-grid">` + Object.entries(CATS).filter(([, c]) => !c.hidden).map(([k, c]) => {
+      const off = k === 'screen' && !screenPlugin();
+      return wizCard('wz-cat', k, d.cat === k, c.label, off ? 'Android uniquement' : c.sub, c.emoji, off);
+    }).join('') + `</div>`;
+  } else if (id === 'name') {
+    q = 'Comment tu l’appelles ?'; sub = 'Choisis aussi un emoji.';
+    const ph = { reduce: "ex. Moins d'alcool, Moins de café…", other: "ex. Boire de l'eau", screen: "ex. Moins d'Instagram" }[d.cat] || 'Nom de la résolution';
+    body = `<div class="row" style="gap:8px"><input class="inp big-name" id="ge-emoji" value="${esc(d.emoji)}" style="flex:0 0 64px;text-align:center;font-size:24px;padding:0" maxlength="4"><input class="inp big-name" id="ge-name" value="${esc(d.name)}" placeholder="${esc(ph)}" maxlength="40"></div>
+      <div class="emojis">${EMOJIS.map(e => `<button data-act="emoji" data-val="${e}">${e}</button>`).join('')}</div>`;
+  } else if (id === 'metrics') {
+    q = 'Qu’est-ce que tu veux compter ?'; sub = 'Un ou plusieurs : il faudra tout atteindre. Les autres pourront être notés à chaque séance, en facultatif.';
+    body = `<div class="wz-cards">` + CATS[d.cat].metrics.map(m => wizCard('ge-metric', m, d.metrics.includes(m), metricLabel(d.cat, m), METRIC_SUB[m], d.metrics.includes(m) ? '✓' : '')).join('') + `</div>`;
+  } else if (id === 'targets') {
+    q = d.cat === 'screen' ? 'Combien de temps maximum ?' : d.cat === 'steps' ? 'Combien de pas ?' : 'Quel objectif ?';
+    sub = d.cat === 'screen' ? `Par ${per}. Au-delà, la résolution est perdue.` : `Par ${per}.`;
+    body = targetRows(d);
+    if (d.cat === 'other' && ['count', 'quantity'].includes(d.type)) body += `<div class="field" style="margin-top:18px"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="fois, verres d'eau, chapitres…" maxlength="20"></div>`;
+    if (d.cat === 'screen') body += `<div class="hint" id="ge-screen-hint">Soit ${hm(draftTarget('limit'))} maximum.</div>`;
+  } else if (id === 'sports') {
+    q = 'Quels sports ?'; sub = 'Facultatif : tu choisiras le sport à chaque séance.';
+    body = sportsPicker(d); cta = d.activities.length ? 'Continuer' : 'Passer';
+  } else if (id === 'reduce') {
+    q = 'Ne pas dépasser…'; sub = `Par ${per}. Si tu dépasses, la résolution est perdue${d.shared !== false ? ' (et publiée dans le fil si elle est publique)' : ''}.`;
+    body = `<div class="field"><label>Unité</label><input class="inp" id="ge-unit" value="${esc(d.unit)}" placeholder="verres, cigarettes, cafés, €…" maxlength="20"></div>
+      <div class="field"><label>Maximum</label>${targetRows(d)}</div><div class="hint">Mets 0 pour arrêter complètement.</div>`;
+  } else if (id === 'scope') {
+    q = 'Quel temps d’écran ?'; foot = false;
+    body = `<div class="wz-cards">` + Object.entries(SCREEN_TYPES).map(([k, l]) => wizCard('wz-scope', k, d.subtype === k, l, { total: 'Tout ce que tu fais sur ton téléphone', categories: 'Réseaux sociaux, vidéo, jeux…', apps: 'Instagram, TikTok, YouTube…' }[k], { total: '📱', categories: '🗂️', apps: '🔎' }[k])).join('') + `</div>`;
+  } else if (id === 'pick') {
+    q = d.subtype === 'apps' ? 'Quelles applications ?' : 'Quelles catégories ?';
+    body = screenPickHtml(d);
+  } else if (id === 'health') {
+    q = 'Connecte tes pas'; sub = 'Les pas sont relevés automatiquement, sans rien noter.';
+    body = stepsHelp();
+  } else if (id === 'type') {
+    q = 'Qu’est-ce que tu veux suivre ?'; foot = false;
+    body = `<div class="wz-cards">` + Object.entries(TYPE_INFO).filter(([k]) => k !== 'daily' || dailyMax(d.period)).map(([k, t]) => wizCard('wz-type', k, d.type === k && d._typed, t.label, t.sub, '')).join('') + `</div>`;
+  } else if (id === 'share') {
+    q = 'Qui peut la voir ?';
+    const lim = d.cat === 'reduce' || d.cat === 'screen';
+    const pub = [d.period === 'week' ? 'dans la rétrospective de la semaine' : '', lim ? 'quand tu la perds' : ''].filter(Boolean).join(' et ');
+    body = `<div class="wz-cards">` + wizCard('ge-share', '1', d.shared !== false, '🌍 Public', 'Tes amis la voient ' + pub, '') + wizCard('ge-share', '0', d.shared === false, '🔒 Privé', 'Elle n’apparaît jamais chez tes amis', '') + `</div>`;
+  } else if (id === 'summary') {
+    q = 'C’est tout bon ?'; sub = 'Tu pourras la modifier à tout moment.';
+    body = wizSummary(d); cta = 'Créer la résolution';
+  }
+  const n = steps.length, pct = d.cat ? Math.round((d._wiz + 1) / n * 100) : (d._wiz + 1) * 12;
+  openPage(`<div class="wz">
+    <div class="wz-top"><button class="wz-nav" data-act="wz-back" aria-label="${d._wiz ? 'Retour' : 'Fermer'}">${d._wiz ? '‹' : '✕'}</button><div class="wz-prog"><i style="width:${pct}%"></i></div><button class="wz-nav" data-act="wz-close" aria-label="Fermer">${d._wiz ? '✕' : ''}</button></div>
+    <div class="wz-body"><div class="wz-step">Étape ${d._wiz + 1}${d.cat ? ' sur ' + n : ''}</div><h1 class="wz-q">${q.replace(/ ([?!:])/g, '\u00a0$1')}</h1>${sub ? `<p class="wz-sub">${sub}</p>` : ''}<div class="wz-in">${body}</div></div>
+    ${foot ? `<div class="wz-foot"><button class="btn" data-act="${id === 'summary' ? 'save-goal' : 'wz-next'}">${cta}</button></div>` : ''}
+  </div>`);
+  if (id === 'name' && !d.name) setTimeout(() => { const el = $('#ge-name'); if (el && pageOpen()) el.focus(); }, 280);
+}
+function wizValidate(d, id) {
+  if (id === 'name' && !d.name.trim()) return 'Donne un nom à ta résolution';
+  if (id === 'metrics' && !d.metrics.length) return 'Choisis au moins une chose à compter';
+  if (id === 'pick' && !d.activities.length) return d.subtype === 'apps' ? 'Choisis au moins une application' : 'Choisis au moins une catégorie';
+  if (id === 'reduce' && !(d.unit || '').trim()) return 'Indique ce que tu comptes (verres, cigarettes…)';
+  if (id === 'targets' || id === 'reduce') for (const m of draftMetrics(d)) if (m !== 'once' && m !== 'limit' && !(num(d.targets[m]) > 0)) return 'Indique un objectif';
+  return '';
+}
+function wizNext() {
+  readGoalForm();
+  const d = goalDraft, id = wizSteps(d)[d._wiz], err = wizValidate(d, id);
+  if (err) { toast(err); return; }
+  d._wiz++; renderGoalEditor();
+}
+
 /* ============ actions ============ */
 const ACTIONS = {
   'tab': el => { tab = el.dataset.tab; if (tab === 'amis') loadSocial(); history.replaceState(null, '', '#' + tab); render(); window.scrollTo(0, 0); },
@@ -2374,6 +2687,7 @@ const ACTIONS = {
     period = PERIODS.find(x => goals.some(g => periodOf(g) === x));
     saveProfile(p);
     toast("C'est parti, " + first + ' ! 🔥');
+    checkSyncedGoals(); setTimeout(flushDonePrompts, 700);   // pas déjà atteints aujourd'hui
   },
   'import-legacy': async el => {
     if (!state.legacy) return;
@@ -2396,9 +2710,28 @@ const ACTIONS = {
   'en-finished': () => { entryDraft.finished = !entryDraft.finished; renderEntrySheet(); },
   'pick-act': el => { entryDraft.activity = entryDraft.activity === el.dataset.val ? '' : el.dataset.val; renderEntrySheet(); },
   'save-entry': () => saveEntry(),
-  'new-goal': () => openGoalEditor(null),
+  'new-goal': () => openWizard(),
+  'setup-next': () => {
+    const f = ($('#su-first') || {}).value || '', l = ($('#su-last') || {}).value || '';
+    setupDraft.first = f.trim(); setupDraft.last = l.trim();
+    if (!setupDraft.first) { toast('Indique ton prénom'); return; }
+    openWizard();
+  },
+  'wz-next': () => wizNext(),
+  'wz-back': () => { if (!goalDraft) return; readGoalForm(); if (goalDraft._wiz > 0) { goalDraft._wiz--; renderGoalEditor(); } else closePage(); },
+  'wz-close': () => closePage(),
+  'wz-period': el => { const d = goalDraft; if (d.period !== el.dataset.val) d.targets = {}; d.period = el.dataset.val; d._picked = true; if (d.type === 'daily' && !dailyMax(d.period)) d.type = 'count'; d._wiz++; renderGoalEditor(); },
+  'wz-cat': el => { setDraftCat(goalDraft, el.dataset.val); goalDraft._wiz++; renderGoalEditor(); },
+  'wz-scope': el => {
+    const d = goalDraft; if (d.subtype !== el.dataset.val) d.activities = [];
+    d.subtype = el.dataset.val; d._wiz++; renderGoalEditor();
+    if (d.subtype === 'apps') syncScreenTime(true).then(() => { if (goalDraft === d && pageOpen()) renderGoalEditor(); });
+  },
+  'wz-type': el => { const d = goalDraft; d.type = el.dataset.val; d._typed = true; d.unit = defaultUnit(d.type, d.cat); d.targets = {}; d._wiz++; renderGoalEditor(); },
+  'wz-health': () => syncSteps(true).then(() => { checkSyncedGoals(); if (goalDraft && pageOpen()) { readGoalForm(); renderGoalEditor(); } render(); }),
+  'steps-perm': () => syncSteps(true).then(() => { checkSyncedGoals(); render(); flushDonePrompts(); if (state.stepsPerm === 'unavailable') toast('Installe Health Connect depuis le Play Store'); }),
   'edit-goal': el => openGoalEditor(el.dataset.id),
-  'emoji': el => { readGoalForm(); goalDraft.emoji = el.dataset.val; $('#ge-emoji').value = el.dataset.val; },
+  'emoji': el => { readGoalForm(); goalDraft.emoji = el.dataset.val; $('#ge-emoji').value = el.dataset.val; document.querySelectorAll('.emojis button').forEach(b => b.classList.toggle('on', b.dataset.val === el.dataset.val)); },
   'seg': el => {
     readGoalForm();
     const f = el.dataset.field, v = el.dataset.val;
@@ -2426,7 +2759,7 @@ const ACTIONS = {
     readGoalForm();
     const d = goalDraft; d.subtype = el.dataset.val;
     if (d.cat === 'reduce') d.emoji = REDUCE_TYPES[d.subtype].emoji;
-    if (d.cat === 'screen') { d.activities = []; if (d.subtype === 'apps') syncScreenTime(true).then(() => { if (goalDraft === d && sheetOpen()) { readGoalForm(); renderGoalEditor(); } }); }
+    if (d.cat === 'screen') { d.activities = []; if (d.subtype === 'apps') syncScreenTime(true).then(() => { if (goalDraft === d && pageOpen()) { readGoalForm(); renderGoalEditor(); } }); }
     if (d.cat === 'sport') {
       if (['💪', '🏃', '🏋️'].includes(d.emoji)) d.emoji = { any: '💪', cardio: '🏃', muscu: '🏋️' }[d.subtype];
       const ok = new Set(sportsFor(d.subtype).map(x => x.name));
@@ -2458,7 +2791,7 @@ const ACTIONS = {
   'screen-sync': async () => {
     await syncScreenTime(true);
     if (state.screenPerm === false) { toast("Autorise d'abord l'accès au temps d'écran"); try { await screenPlugin().openSettings(); } catch (e) {} return; }
-    if (sheetOpen() && goalDraft) { readGoalForm(); renderGoalEditor(); }
+    if (pageOpen() && goalDraft) { readGoalForm(); renderGoalEditor(); }
   },
   'ge-new-sport': () => { readGoalForm(); newSportOpen = !newSportOpen; renderGoalEditor(); if (newSportOpen) setTimeout(() => { const el = $('#ge-newsport'); if (el) el.focus(); }, 50); },
   'ge-add-sport': () => addUserSport(),
@@ -2469,7 +2802,7 @@ const ACTIONS = {
     let v = Math.max(m === 'limit' ? 0 : 1, t + inc);
     if (m === 'days') v = Math.min(dailyMax(d.period), v);
     d.targets[m] = v; $('#ge-t-' + m).value = v;
-    if (d.cat === 'screen') { readGoalForm(); renderGoalEditor(); }
+    if (d.cat === 'screen') { readGoalForm(); const hint = $('#ge-screen-hint'); if (hint) hint.textContent = 'Soit ' + hm(d.targets.limit) + ' maximum.'; }
   },
   'en-step': el => { const i = $('#en-amount'); i.value = Math.max(1, num(i.value) + +el.dataset.val); },
   'toggle-injury': () => toggleInjury(),
@@ -2580,7 +2913,7 @@ document.addEventListener('change', async e => {
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'ge-t-limit' && $('#ge-screen-hint')) $('#ge-screen-hint').textContent = `Soit ${hm(num(e.target.value))} maximum. Le temps est relevé automatiquement sur ton téléphone.`;
+  if (e.target.id === 'ge-t-limit' && $('#ge-screen-hint') && $('#ge-screen-hint')) $('#ge-screen-hint').textContent = `Soit ${hm(num(e.target.value))} maximum. Le temps est relevé automatiquement sur ton téléphone.`;
   if (e.target.id === 'su-first') setupDraft.first = e.target.value;
   if (e.target.id === 'su-last') setupDraft.last = e.target.value;
 });
@@ -2591,10 +2924,12 @@ document.addEventListener('keydown', e => {
 window.flfBack = () => {
   if (retroOpen()) { closeRetro(); return true; }
   if (sheetOpen()) { closeSheet(); return true; }
+  if (pageOpen()) { if (goalDraft && goalDraft._wiz > 0) { readGoalForm(); goalDraft._wiz--; renderGoalEditor(); } else closePage(); return true; }
+  if (sheetOpen()) { closeSheet(); return true; }
   if (state.profile && tab !== 'resolutions') { tab = 'resolutions'; render(); window.scrollTo(0, 0); return true; }
   return false;
 };
-window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false).then(() => { if (state.phase === 'app') { publishResults(); retroAutoChecked = false; maybeAutoRetro(); } }); if (tab === 'amis') loadSocial(true); };
+window.flfResume = () => { lastWeekSeen = todayKey(); reloadData(false).then(() => { if (state.phase === 'app') { checkSyncedGoals(); publishResults(); retroAutoChecked = false; if (!sheetOpen() && !flushDonePrompts()) maybeAutoRetro(); } }); if (tab === 'amis') loadSocial(true); };
 window.addEventListener('online', () => { render(); if (state.phase === 'offline') loadData(); else reloadData(false); });
 window.addEventListener('offline', () => render());
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== tab) { tab = t; render(); } });
@@ -2622,6 +2957,8 @@ window.addEventListener('hashchange', () => { const t = location.hash.slice(1); 
       authMode = 'login'; tab = 'amis'; setupDraft.first = null;
       Object.assign(social, { loaded: false, friends: [], incoming: [], outgoing: [], people: {}, posts: [], likes: {} }); retroAutoChecked = false;
       if (retroOpen()) $('#retro').classList.remove('open');
+      if (pageOpen()) { $('#page').classList.remove('open'); goalDraft = null; unlockScroll(); }
+      donePrompts = []; state.steps = {}; state.stepsPerm = undefined;
       render();
     }
   });

@@ -43,6 +43,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Resolio utilise l'appareil photo pour ta photo de profil et les photos de tes activités.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Resolio lit ton nombre de pas dans Santé pour suivre tes résolutions « Nombre de pas ».</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Resolio n'écrit rien dans Santé.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Resolio peut enregistrer l'export de tes données.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
