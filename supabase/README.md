@@ -21,7 +21,8 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 6. Nouvelle requête : fais pareil avec `migrations/20261111250000_resolio_books.sql` (livre terminé).
 7. Nouvelle requête : fais pareil avec `migrations/20261111260000_resolio_friends.sql` (amis, fil d'activité, rétrospectives).
 8. Nouvelle requête : fais pareil avec `migrations/20261126200000_resolio_jour_semaine.sql` (plus que des résolutions jour / semaine : **supprime** les résolutions mois / année, leurs saisies et leurs rétrospectives). Elle ne recrée rien et peut être relancée sans risque.
-9. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** les buckets `avatars` et `posts`.
+9. Nouvelle requête : fais pareil avec `migrations/20261127200000_resolio_assistant.sql` (catégories Musculation / Cardio / Révision / Nombre de pas, Réduire libre, publications « Perdu », pas synchronisés, préparation Strava / Liftoff). Mise à jour uniquement : tes anciennes résolutions Sport deviennent Musculation ou Cardio.
+10. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** les buckets `avatars` et `posts`.
 
 | Table | Contenu |
 | --- | --- |
@@ -37,6 +38,7 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 | `post_likes` | Likes des publications |
 | `period_results` | Bilan de fin de semaine / mois / année publié pour la rétrospective des amis (résolutions « Public » seulement) |
 | `result_likes` | Likes dans la rétrospective |
+| `daily_steps` | Nombre de pas par jour, lu sur le téléphone (Health Connect / Apple Santé) |
 
 Sécurité (Row Level Security) : chaque utilisateur ne peut lire et modifier **que ses propres lignes** ; les visiteurs non connectés n'ont accès à rien. Exception : tes **amis** (demande acceptée) voient ton prénom, nom, photo, code ami, séries et badges, tes publications et tes bilans partagés — jamais tes résolutions ni tes saisies elles-mêmes. Les photos sont rangées dans `avatars/<id utilisateur>/` et `posts/<id utilisateur>/`.
 
