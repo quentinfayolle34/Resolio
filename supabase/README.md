@@ -20,7 +20,8 @@ L'application ne garde rien sur le téléphone, à part la session de connexion.
 5. Nouvelle requête : fais pareil avec `migrations/20261111240000_resolio_screen_time.sql` (temps d'écran).
 6. Nouvelle requête : fais pareil avec `migrations/20261111250000_resolio_books.sql` (livre terminé).
 7. Nouvelle requête : fais pareil avec `migrations/20261111260000_resolio_friends.sql` (amis, fil d'activité, rétrospectives).
-8. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** les buckets `avatars` et `posts`.
+8. Nouvelle requête : fais pareil avec `migrations/20261126200000_resolio_jour_semaine.sql` (plus que des résolutions jour / semaine : **supprime** les résolutions mois / année, leurs saisies et leurs rétrospectives). Elle ne recrée rien et peut être relancée sans risque.
+9. Vérifie dans **Table Editor** : tu dois voir `profiles`, `goals`, `weeks`, `entries` (avec le cadenas *RLS enabled*), et dans **Storage** les buckets `avatars` et `posts`.
 
 | Table | Contenu |
 | --- | --- |
