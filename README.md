@@ -2,13 +2,13 @@
 
 **Tes objectifs de la semaine. Pas d'excuses.**
 
-Resolio est une application mobile de résolutions **par jour, semaine, mois ou année** : boire 2 L d'eau par jour, lire 100 pages et faire 3 séances de sport par semaine, lire 400 pages par mois… À la fin de chaque période (minuit, dimanche minuit, fin du mois, 31 décembre), un bilan indique si elle est validée.
+Resolio est une application mobile de résolutions **par jour ou par semaine** : boire 2 L d'eau par jour, lire 100 pages et faire 3 séances de sport par semaine… À la fin de chaque période (minuit, dimanche minuit), un bilan indique si elle est validée.
 
 - **Résolutions** : onglets Jour / Semaine / Mois / Année (seuls ceux qui ont des résolutions s'affichent), progression, journal des séances et lectures (livre, activité, durée, distance).
 - **Objectifs** : nouvelle résolution (période ; catégorie Lecture, Sport, Méditation, Réduire ou Autre ; une ou plusieurs mesures : nombre de fois, temps, distance, pages ; maximum à ne pas dépasser pour Réduire ; **Temps d'écran** relevé automatiquement sur Android : tout le téléphone, catégories ou applications), modifier les chiffres, pause blessure, archivage.
-- **Historique** : chaque jour / semaine / mois / année passé, validé ou non, séries et records.
+- **Historique** : calendrier du mois (✓ les jours avec au moins une activité, hors « Réduire » ; un appui sur un jour affiche le détail), puis chaque jour / semaine passé, validé ou non, séries et records.
 - **Profil** : nom, prénom, photo, email, date de naissance et ville (facultatifs), séries, totaux, 12 badges à 5 niveaux (Bronze → Diamant).
-- **Amis** (onglet ouvert au démarrage) : ajout par **code ami** unique avec demande à accepter, fil d'activité (tes saisies « Public » et celles de tes amis, note, photo prise ou importée, likes, tout l'historique), profil d'ami (photo, séries, badges). À la fin de chaque semaine, mois et année : **rétrospective** en carrousel plein écran (toi d'abord, puis ceux qui ont réussi en jaune, puis les autres en rouge, avec likes) ; chaque résolution peut être **Public** ou **Privé** pour la rétrospective.
+- **Amis** (onglet ouvert au démarrage) : ajout par **code ami** unique avec demande à accepter, fil d'activité (une publication quand une résolution est **tenue** : popup « Résolution tenue ! » avec photo prise ou importée et un mot, ou « Ne pas publier » ; likes, tout l'historique), profil d'ami (photo, séries, badges). À la fin de chaque semaine : **rétrospective** en carrousel plein écran (toi d'abord, puis ceux qui ont réussi en jaune, puis les autres en rouge, avec likes) ; chaque résolution peut être **Public** ou **Privé** pour la rétrospective.
 - **Compte** : connexion par email + mot de passe ou avec Google, mot de passe oublié, suppression du compte.
 
 Toutes les données sont dans une base **Supabase** (une seule base pour tous les comptes, chacun ne voit que ses données) : l'app a besoin d'internet et tu retrouves tout sur n'importe quel téléphone → voir **[supabase/README.md](supabase/README.md)**.
